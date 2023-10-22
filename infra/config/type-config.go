@@ -1,4 +1,4 @@
-package App
+package config
 
 type AppConfig struct {
 	SERVERPORT int

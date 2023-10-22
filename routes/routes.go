@@ -1,36 +1,43 @@
 package routes
 
 import (
-	"project/controllers"
-	"project/middleware"
+	"miniproject/delivery/controllers"
 
 	"github.com/labstack/echo"
-	"gorm.io/gorm"
+	"github.com/labstack/echo/middleware"
 )
 
-func InitmyRoutes(e *echo.Echo, db *gorm.DB) {
-	userController := controllers.NewUserController(db)
-	adminController := controllers.NewInternshipController(db)
+func InitmyRoutes(A *controllers.AdminController, u  *controllers.UserController) *echo.Echo {
+	e := echo.New()
 
-	// Grup untuk rute pengguna (user)
+	// Middleware
+	e.Use(middleware.Logger())
+	e.Use(middleware.Recover())
+
+	// Rute-rute admin
+	adminGroup := e.Group("/admin")
+	adminGroup.POST("/login", A.LoginAdmin)
+	adminGroup.GET("/admin/:id", A.GetAdminByID)
+	adminGroup.PUT("/admin/:id", A.UpdateAdmin)
+	adminGroup.DELETE("/admin/:id", A.DeleteAdmin)
+	adminGroup.POST("/internship", A.CreateInternshipListing)
+	adminGroup.POST("/application", A.CreateInternshipApplicationForm)
+	adminGroup.PUT("/updateStatus/:id", A.UpdateApplicationStatus)
+	adminGroup.PUT("/admin/verifyCancel/:id", A.VerifyCancelApplication)
+
+	// Route untuk registrasi
 	userGroup := e.Group("/user")
-	userGroup.POST("/register", userController.RegisterUser)
-	userGroup.POST("/login", userController.LoginUser)
-	userGroup.GET("/profile", userController.GetUserProfile)
-	userGroup.GET("/profile/:id", userController.GetUserProfileByID)
-	userGroup.PUT("/profile", userController.UpdateUserProfile)
-	userGroup.DELETE("/profile/:id", userController.DeleteUser)
-	userGroup.GET("/application-status", userController.GetApplicationStatus)
-	userGroup.DELETE("/application/:id", userController.CancelApplication)
+	userGroup.POST("/register", u.Register)
+	userGroup.POST("/login", u.Login)
+	userGroup.PUT("/profile", u.UpdateProfile)
+	userGroup.POST("/profilePicture", u.UploadProfilePicture)
+	userGroup.GET("/users", u.GetAllUsers)
+	userGroup.GET("/users/:id", u.GetUserByID)
+	userGroup.DELETE("/users/:id", u.DeleteUserByID)
+	userGroup.GET("/internshipListings", u.GetInternshipListings)
+	userGroup.POST("/internship/:id", u.ChooseInternshipListing)
+	userGroup.GET("/ApplicationStatus", u.GetApplicationStatus)
+	userGroup.POST("/cancelApplication/:id", u.CancelApplication)
 
-	// Grup untuk rute admin
-    adminGroup := e.Group("/admin")
-    adminGroup.Use(middleware.PastikanPenggunaAdmin)
-    adminGroup.POST("/AdminInternship", adminController.CreateInternship)
-    adminGroup.PUT("/AdminInternship/:id", adminController.UpdateInternship)
-    adminGroup.DELETE("/AdminInternship/:id", adminController.DeleteInternship)
-    adminGroup.PUT("/AdminApplicationStatus/:id", adminController.UpdateApplicationStatus)
-    adminGroup.POST("/login", adminController.AdminLogin) 
-	adminGroup.GET("/AdminApplicationStatus", adminController.ApplicationsByStatus) 
-	
+	return e
 }
