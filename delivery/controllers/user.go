@@ -3,6 +3,7 @@ package controllers
 import (
 	"context"
 	"io"
+	"log"
 	"miniproject/entity"
 	"miniproject/middleware"
 	"net/http"
@@ -15,13 +16,12 @@ import (
 )
 
 type UserController struct {
-	DB *gorm.DB
+	DB  *gorm.DB
+	Log *log.Logger
 }
 
-func NewUserController(db *gorm.DB) *UserController {
-	return &UserController{
-		DB: db,
-	}
+func NewUserController(db *gorm.DB, logger *log.Logger) *UserController {
+	return &UserController{DB: db, Log: logger}
 }
 
 // Register digunakan untuk mendaftarkan pengguna baru.
@@ -29,11 +29,13 @@ func (u *UserController) Register(c echo.Context) error {
 	username := c.FormValue("username")
 	password := c.FormValue("password")
 	if username == "" || password == "" {
+		u.Log.Println("Username and password are required") // Log pesan kesalahan
 		return c.JSON(http.StatusBadRequest, map[string]string{"message": "Username and password are required"})
 	}
 
 	hashedPassword, err := bcrypt.GenerateFromPassword([]byte(password), bcrypt.DefaultCost)
 	if err != nil {
+		u.Log.Printf("Error generating password hash: %v", err) // Log pesan kesalahan
 		return c.JSON(http.StatusInternalServerError, map[string]string{"message": "An error occurred"})
 	}
 
@@ -43,8 +45,10 @@ func (u *UserController) Register(c echo.Context) error {
 	}
 
 	if err := u.DB.Create(&user).Error; err != nil {
+		u.Log.Printf("Error creating user: %v", err) // Log pesan kesalahan
 		return c.JSON(http.StatusInternalServerError, map[string]string{"message": "An error occurred"})
 	}
+	u.Log.Println("User registered successfully") // Log pesan sukses
 	return c.JSON(http.StatusCreated, map[string]string{"message": "User registered successfully"})
 }
 
@@ -55,12 +59,15 @@ func (u *UserController) Login(c echo.Context) error {
 
 	var user entity.User
 	if err := u.DB.Where("username = ?", username).First(&user).Error; err != nil {
+		u.Log.Printf("Login failed: %v", err) // Log pesan kesalahan
 		return c.JSON(http.StatusUnauthorized, map[string]string{"message": "Username or password is incorrect"})
 	}
 
 	if err := bcrypt.CompareHashAndPassword([]byte(user.Password), []byte(password)); err != nil {
+		u.Log.Printf("Login failed: %v", err) // Log pesan kesalahan
 		return c.JSON(http.StatusUnauthorized, map[string]string{"message": "Username or password is incorrect"})
 	}
+	u.Log.Println("Login successful") // Log pesan sukses
 	return c.JSON(http.StatusOK, map[string]string{"message": "Login successful"})
 }
 
