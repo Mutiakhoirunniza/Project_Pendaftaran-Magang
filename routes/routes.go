@@ -4,15 +4,10 @@ import (
 	"miniproject/delivery/controllers"
 
 	"github.com/labstack/echo"
-	"github.com/labstack/echo/middleware"
 )
 
-func InitmyRoutes(A *controllers.AdminController, u  *controllers.UserController) *echo.Echo {
+func InitmyRoutes(A *controllers.AdminController, u *controllers.UserController) *echo.Echo {
 	e := echo.New()
-
-	// Middleware
-	e.Use(middleware.Logger())
-	e.Use(middleware.Recover())
 
 	// Rute-rute admin
 	adminGroup := e.Group("/admin")
