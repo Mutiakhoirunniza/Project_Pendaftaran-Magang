@@ -1,4 +1,4 @@
-package email
+package Email
 
 import (
 	"os"
@@ -7,8 +7,7 @@ import (
 	"gopkg.in/gomail.v2"
 )
 
-func SendEmail(email string, subject string, body string) error {
-	// Baca variabel lingkungan untuk konfigurasi SMTP
+func SendEmailToUSER(email string, subject string, body string) error {
 	smtpServer := os.Getenv("SMTPSERVER")
 	smtpPortStr := os.Getenv("SMTPPORT")
 	smtpUsername := os.Getenv("SMTPUSERNAME")

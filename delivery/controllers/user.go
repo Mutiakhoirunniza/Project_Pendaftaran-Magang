@@ -1,12 +1,13 @@
 package controllers
 
 import (
-	"fmt"
+	"context"
+	"io"
 	"miniproject/entity"
 	"miniproject/middleware"
 	"net/http"
+	"path/filepath"
 	"strconv"
-	"strings"
 
 	"github.com/labstack/echo"
 	"golang.org/x/crypto/bcrypt"
@@ -23,6 +24,7 @@ func NewUserController(db *gorm.DB) *UserController {
 	}
 }
 
+// Register digunakan untuk mendaftarkan pengguna baru.
 func (u *UserController) Register(c echo.Context) error {
 	username := c.FormValue("username")
 	password := c.FormValue("password")
@@ -46,6 +48,7 @@ func (u *UserController) Register(c echo.Context) error {
 	return c.JSON(http.StatusCreated, map[string]string{"message": "User registered successfully"})
 }
 
+// Login digunakan untuk melakukan proses login pengguna.
 func (u *UserController) Login(c echo.Context) error {
 	username := c.FormValue("username")
 	password := c.FormValue("password")
@@ -61,84 +64,105 @@ func (u *UserController) Login(c echo.Context) error {
 	return c.JSON(http.StatusOK, map[string]string{"message": "Login successful"})
 }
 
+// UpdateProfile digunakan untuk mengupdate profil pengguna.
 func (u *UserController) UpdateProfile(c echo.Context) error {
-    userID, err := middleware.GetUserIDFromToken(c)
-    if err != nil {
-        return c.JSON(http.StatusUnauthorized, map[string]string{"message": "Invalid JWT token"})
-    }
-
-    email := c.FormValue("email")
-    gender := c.FormValue("gender")
-    phoneNumber := c.FormValue("phone_number")
-    universityName := c.FormValue("university_name")
-    universityAddress := c.FormValue("university_address")
-    major := c.FormValue("major")
-
-    if email == "" || gender == "" || len(email) > 100 {
-        return c.JSON(http.StatusBadRequest, map[string]string{"message": "Email and gender are required, and email length is too large"})
-    }
-
-    if major == "" {
-        return c.JSON(http.StatusBadRequest, map[string]string{"message": "Major is required"})
-    }
-
-    // Update the user's profile data in the database
-    if err := u.DB.Model(&entity.User{}).Where("id = ?", userID).Updates(map[string]interface{}{
-        "email":              email,
-        "gender":             gender,
-        "phone_number":       phoneNumber,
-        "university_name":    universityName,
-        "university_address": universityAddress,
-        "major":              major,
-    }).Error; err != nil {
-        return c.JSON(http.StatusInternalServerError, map[string]string{"message": "An error occurred"})
-    }
-
-    return c.JSON(http.StatusOK, map[string]string{"message": "Profile updated successfully"})
-}
-
-func (u *UserController) UploadProfilePicture(c echo.Context) error {
 	userID, err := middleware.GetUserIDFromToken(c)
 	if err != nil {
 		return c.JSON(http.StatusUnauthorized, map[string]string{"message": "Invalid JWT token"})
 	}
-	file, err := c.FormFile("profile_picture")
-	if err != nil {
-		return c.JSON(http.StatusBadRequest, map[string]string{"message": "Profile picture is required"})
+
+	email := c.FormValue("email")
+	gender := c.FormValue("gender")
+	phoneNumber := c.FormValue("phone_number")
+	universityName := c.FormValue("university_name")
+	universityAddress := c.FormValue("university_address")
+	major := c.FormValue("major")
+
+	if email == "" || gender == "" || len(email) > 100 {
+		return c.JSON(http.StatusBadRequest, map[string]string{"message": "Email and gender are required, and email length is too large"})
 	}
 
-	if file.Size > 3*1024*1024 {
-		return c.JSON(http.StatusBadRequest, map[string]string{"message": "Profile picture size should be less than 3MB"})
+	if major == "" {
+		return c.JSON(http.StatusBadRequest, map[string]string{"message": "Major is required"})
 	}
 
-	if !isValidImageType(file.Filename) {
-		return c.JSON(http.StatusBadRequest, map[string]string{"message": "Invalid file type"})
-	}
-	safeFileName := fmt.Sprintf("%s_%s", userID, file.Filename)
-
-	uploadPath := "profile_pictures/" + safeFileName
-	if err := c.SaveFile(file, uploadPath); err != nil {
-		return c.JSON(http.StatusInternalServerError, map[string]string{"message": "An error occurred while saving the file"})
-	}
-
-	if err := u.DB.Model(&entity.User{}).Where("id = ?", userID).Update("profile_picture", safeFileName).Error; err != nil {
+	// Update the user's profile data in the database
+	if err := u.DB.Model(&entity.User{}).Where("id = ?", userID).Updates(map[string]interface{}{
+		"email":              email,
+		"gender":             gender,
+		"phone_number":       phoneNumber,
+		"university_name":    universityName,
+		"university_address": universityAddress,
+		"major":              major,
+	}).Error; err != nil {
 		return c.JSON(http.StatusInternalServerError, map[string]string{"message": "An error occurred"})
 	}
 
-	return c.JSON(http.StatusOK, map[string]string{"message": "Profile picture uploaded successfully"})
+	return c.JSON(http.StatusOK, map[string]string{"message": "Profile updated successfully"})
 }
 
-var allowedExtensions = []string{".jpg", ".jpeg", ".png", ".gif"}
+// UploadProfilePicture digunakan untuk mengunggah foto profil pengguna.
+func (u *UserController) UploadProfilePicture(c echo.Context) error {
+	file, err := c.FormFile("profile_picture")
+	if err != nil {
+		return c.JSON(http.StatusBadRequest, "Gagal mendapatkan file gambar")
+	}
+	// Periksa jenis file
+	if !isImageFile(file.Filename) {
+		return c.JSON(http.StatusBadRequest, "File yang diunggah harus berupa gambar")
+	}
+	// Periksa ukuran file (maksimal 3MB)
+	maxSize := int64(3 * 1024 * 1024)
+	if file.Size > maxSize {
+		return c.JSON(http.StatusBadRequest, "Ukuran file terlalu besar (maksimal 3MB)")
+	}
 
-func isValidImageType(fileName string) bool {
+	// Baca file gambar
+	src, err := file.Open()
+	if err != nil {
+		return c.JSON(http.StatusInternalServerError, "Gagal membuka file gambar")
+	}
+	defer src.Close()
+
+	// Inisialisasi koneksi ke GCS
+	ctx := context.Background()
+	client, err := storage.NewClient(ctx)
+	if err != nil {
+		return c.JSON(http.StatusInternalServerError, map[string]string{"message": "Gagal terhubung ke GCS"})
+	}
+	defer client.Close()
+
+	// Simpan file gambar di GCS
+	bucketName := "nama-bucket-gcs" // Ganti dengan nama bucket GCS Anda
+	objectName := "foto/" + file.Filename
+
+	wc := client.Bucket(bucketName).Object(objectName).NewWriter(ctx)
+	if _, err := io.Copy(wc, src); err != nil {
+		wc.Close()
+		return c.JSON(http.StatusInternalServerError, map[string]string{"message": "Gagal mengunggah foto ke GCS"})
+	}
+	wc.Close()
+
+	// Simpan URL GCS ke database atau sesuai kebutuhan aplikasi Anda
+	fotoURL := "https://storage.googleapis.com/" + bucketName + "/" + objectName
+
+	return c.JSON(http.StatusOK, map[string]string{"image_url": fotoURL})
+}
+
+// Fungsi untuk memeriksa apakah file adalah gambar
+func isImageFile(filename string) bool {
+	// dalam format yang diizinkan.
+	allowedExtensions := []string{".jpg", ".jpeg", ".png", ".gif", ".bmp"}
+	extension := filepath.Ext(filename)
 	for _, ext := range allowedExtensions {
-		if strings.HasSuffix(fileName, ext) {
+		if ext == extension {
 			return true
 		}
 	}
 	return false
 }
 
+// GetAllUsers digunakan untuk mendapatkan semua data pengguna.
 func (u *UserController) GetAllUsers(c echo.Context) error {
 	var users []entity.User
 	if err := u.DB.Find(&users).Error; err != nil {
@@ -151,6 +175,7 @@ func (u *UserController) GetAllUsers(c echo.Context) error {
 	})
 }
 
+// GetUserByID digunakan untuk mendapatkan data pengguna berdasarkan ID.
 func (u *UserController) GetUserByID(c echo.Context) error {
 	idStr := c.Param("id")
 	id, err := strconv.Atoi(idStr)
@@ -169,6 +194,7 @@ func (u *UserController) GetUserByID(c echo.Context) error {
 	})
 }
 
+// DeleteUserByID digunakan untuk menghapus pengguna berdasarkan ID.
 func (u *UserController) DeleteUserByID(c echo.Context) error {
 	idStr := c.Param("id")
 	id, err := strconv.Atoi(idStr)
@@ -188,6 +214,7 @@ func (u *UserController) DeleteUserByID(c echo.Context) error {
 	return c.JSON(http.StatusOK, map[string]string{"message": "Success: user deleted"})
 }
 
+// GetInternshipListings digunakan untuk mendapatkan daftar lowongan magang.
 func (u *UserController) GetInternshipListings(c echo.Context) error {
 	var listings []entity.InternshipListing
 	if err := u.DB.Find(&listings).Error; err != nil {
@@ -208,6 +235,7 @@ func (u *UserController) GetInternshipListings(c echo.Context) error {
 	return c.JSON(http.StatusOK, result)
 }
 
+// CheckIfUserFilledForm digunakan untuk memeriksa apakah pengguna sudah mengisi formulir pendaftaran magang.
 func (u *UserController) CheckIfUserFilledForm(c echo.Context, userID int) bool {
 	var formData entity.InternshipApplicationForm
 	if err := u.DB.Where("user_id = ?", userID).First(&formData).Error; err != nil {
@@ -216,6 +244,7 @@ func (u *UserController) CheckIfUserFilledForm(c echo.Context, userID int) bool 
 	return true
 }
 
+// HasPermission adalah fungsi bantu untuk memeriksa izin pengguna.
 func HasPermission(userRole string) bool {
 	if userRole == "User" {
 		return true
@@ -273,94 +302,97 @@ func (u *UserController) ChooseInternshipListing(c echo.Context) error {
 	return c.JSON(http.StatusOK, map[string]string{"message": "Pemilihan pendaftaran magang berhasil"})
 }
 
+// GetApplicationStatus digunakan untuk mendapatkan status aplikasi pengguna.
 func (u *UserController) GetApplicationStatus(c echo.Context) error {
-    userID, err := middleware.GetUserIDFromToken(c)
-    if err != nil {
-        return c.JSON(http.StatusUnauthorized, map[string]string{"message": "Invalid JWT token"})
-    }
+	userID, err := middleware.GetUserIDFromToken(c)
+	if err != nil {
+		return c.JSON(http.StatusUnauthorized, map[string]string{"message": "Invalid JWT token"})
+	}
 
-    // Parse user ID as an integer
-    userIDInt, err := strconv.Atoi(userID)
-    if err != nil {
-        return c.JSON(http.StatusBadRequest, map[string]string{"message": "Invalid user ID"})
-    }
+	// Parse user ID as an integer
+	userIDInt, err := strconv.Atoi(userID)
+	if err != nil {
+		return c.JSON(http.StatusBadRequest, map[string]string{"message": "Invalid user ID"})
+	}
 
-    // Query the database to get the internship listings chosen by the user
-    var selectedListings []entity.InternshipListing
-    if err := u.DB.Model(&entity.InternshipListing{}).Where("selected_candidates LIKE ?", "%"+strconv.Itoa(userIDInt)+"%").Find(&selectedListings).Error; err != nil {
-        return c.JSON(http.StatusInternalServerError, map[string]string{"message": "Failed to retrieve selected listings"})
-    }
+	// Query the database to get the internship listings chosen by the user
+	var selectedListings []entity.InternshipListing
+	if err := u.DB.Model(&entity.InternshipListing{}).Where("selected_candidates LIKE ?", "%"+strconv.Itoa(userIDInt)+"%").Find(&selectedListings).Error; err != nil {
+		return c.JSON(http.StatusInternalServerError, map[string]string{"message": "Failed to retrieve selected listings"})
+	}
 
-    // Prepare the response data
-    var applicationStatus []map[string]interface{}
-    for _, listing := range selectedListings {
-        listingData := map[string]interface{}{
-            "listing_id":   listing.ID,
-            "title":        listing.Title,
-            "description":  listing.Description,
-            "quota":        listing.Quota,
-        }
-        applicationStatus = append(applicationStatus, listingData)
-    }
+	// Prepare the response data
+	var applicationStatus []map[string]interface{}
+	for _, listing := range selectedListings {
+		listingData := map[string]interface{}{
+			"listing_id":  listing.ID,
+			"title":       listing.Title,
+			"description": listing.Description,
+			"quota":       listing.Quota,
+		}
+		applicationStatus = append(applicationStatus, listingData)
+	}
 
-    return c.JSON(http.StatusOK, map[string]interface{}{
-        "message":           "Success: get application status",
-        "selected_listings": applicationStatus,
-    })
+	return c.JSON(http.StatusOK, map[string]interface{}{
+		"message":           "Success: get application status",
+		"selected_listings": applicationStatus,
+	})
 }
 
+// contains adalah fungsi bantu untuk memeriksa apakah elemen ada dalam slice.
 func contains(slice []int, item int) bool {
-    for _, v := range slice {
-        if v == item {
-            return true
-        }
-    }
-    return false
+	for _, v := range slice {
+		if v == item {
+			return true
+		}
+	}
+	return false
 }
 
+// CancelApplication digunakan untuk membatalkan aplikasi pengguna.
 func (u *UserController) CancelApplication(c echo.Context) error {
-    // Mendapatkan ID pengguna dari token JWT
-    userID, err := middleware.GetUserIDFromToken(c)
-    if err != nil {
-        return c.JSON(http.StatusUnauthorized, map[string]string{"message": "Token JWT tidak valid"})
-    }
+	// Mendapatkan ID pengguna dari token JWT
+	userID, err := middleware.GetUserIDFromToken(c)
+	if err != nil {
+		return c.JSON(http.StatusUnauthorized, map[string]string{"message": "Token JWT tidak valid"})
+	}
 
-    // Mengurai ID pengguna ke dalam bentuk integer
-    userIDInt, err := strconv.Atoi(userID)
-    if err != nil {
-        return c.JSON(http.StatusBadRequest, map[string]string{"message": "ID pengguna tidak valid"})
-    }
+	// Mengurai ID pengguna ke dalam bentuk integer
+	userIDInt, err := strconv.Atoi(userID)
+	if err != nil {
+		return c.JSON(http.StatusBadRequest, map[string]string{"message": "ID pengguna tidak valid"})
+	}
 
-    // Mengurai ID listing dari permintaan
-    listingIDStr := c.Param("listing_id")
-    listingID, err := strconv.Atoi(listingIDStr)
-    if err != nil {
-        return c.JSON(http.StatusBadRequest, map[string]string{"message": "ID listing tidak valid"})
-    }
+	// Mengurai ID listing dari permintaan
+	listingIDStr := c.Param("listing_id")
+	listingID, err := strconv.Atoi(listingIDStr)
+	if err != nil {
+		return c.JSON(http.StatusBadRequest, map[string]string{"message": "ID listing tidak valid"})
+	}
 
-    // Mengambil data listing yang dipilih dari database
-    var selectedListing entity.InternshipListing
-    if err := u.DB.First(&selectedListing, listingID).Error; err != nil {
-        return c.JSON(http.StatusNotFound, map[string]string{"message": "Listing yang dipilih tidak ditemukan"})
-    }
+	// Mengambil data listing yang dipilih dari database
+	var selectedListing entity.InternshipListing
+	if err := u.DB.First(&selectedListing, listingID).Error; err != nil {
+		return c.JSON(http.StatusNotFound, map[string]string{"message": "Listing yang dipilih tidak ditemukan"})
+	}
 
-    // Memeriksa apakah ID pengguna terdapat dalam daftar kandidat yang dipilih
-    if !contains(selectedListing.SelectedCandidates, userIDInt) {
-        return c.JSON(http.StatusBadRequest, map[string]string{"message": "Pengguna tidak terpilih untuk listing ini"})
-    }
+	// Memeriksa apakah ID pengguna terdapat dalam daftar kandidat yang dipilih
+	if !contains(selectedListing.SelectedCandidates, userIDInt) {
+		return c.JSON(http.StatusBadRequest, map[string]string{"message": "Pengguna tidak terpilih untuk listing ini"})
+	}
 
-    // Memeriksa apakah status aplikasi sudah 'dibatalkan'
-    if selectedListing.StatusPendaftaran == "dibatalkan" {
-        return c.JSON(http.StatusBadRequest, map[string]string{"message": "Aplikasi sudah dibatalkan"})
-    }
+	// Memeriksa apakah status aplikasi sudah 'dibatalkan'
+	if selectedListing.StatusPendaftaran == "dibatalkan" {
+		return c.JSON(http.StatusBadRequest, map[string]string{"message": "Aplikasi sudah dibatalkan"})
+	}
 
-    // Mengubah status aplikasi menjadi 'dibatalkan' (Menunggu verifikasi admin)
-    selectedListing.StatusPendaftaran = "dibatalkan"
+	// Mengubah status aplikasi menjadi 'dibatalkan' (Menunggu verifikasi admin)
+	selectedListing.StatusPendaftaran = "dibatalkan"
 
-    // Menyimpan perubahan pada listing ke dalam database
-    if err := u.DB.Save(&selectedListing).Error; err != nil {
-        return c.JSON(http.StatusInternalServerError, map[string]string{"message": "Gagal membatalkan aplikasi"})
-    }
+	// Menyimpan perubahan pada listing ke dalam database
+	if err := u.DB.Save(&selectedListing).Error; err != nil {
+		return c.JSON(http.StatusInternalServerError, map[string]string{"message": "Gagal membatalkan aplikasi"})
+	}
 
-    return c.JSON(http.StatusOK, map[string]string{"message": "Permintaan pembatalan aplikasi berhasil. Menunggu verifikasi admin"})
+	return c.JSON(http.StatusOK, map[string]string{"message": "Permintaan pembatalan aplikasi berhasil. Menunggu verifikasi admin"})
 }
