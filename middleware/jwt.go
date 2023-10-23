@@ -121,38 +121,3 @@ func verifyJWTToken(tokenString string) (jwt.MapClaims, error) {
 
 	return nil, fmt.Errorf("Token JWT tidak valid")
 }
-
-// // Middleware untuk memeriksa apakah pengguna telah mengisi formulir pendaftaran
-// func CheckInternshipFormSubmitted() echo.MiddlewareFunc {
-// 	return func(next echo.HandlerFunc) echo.HandlerFunc {
-// 		return func(c echo.Context) error {
-// 			// Cek apakah pengguna telah mengisi formulir
-// 			var formData entity.InternshipApplicationForm
-// 			if err := u.DB.Where("user_id = ?", c.Get("user_id")).First(&formData).Error; err != nil {
-// 				// Pengguna belum mengisi formulir, kembalikan pesan error
-// 				return c.JSON(http.StatusBadRequest, map[string]string{"message": "Anda harus mengisi formulir pendaftaran terlebih dahulu"})
-// 			}
-
-// 			// Lanjutkan ke tahap memilih daftar lowongan magang
-// 			return next(c)
-// 		}
-// 	}
-// }
-
-// // user
-// func DatabaseMiddleware(next echo.HandlerFunc) echo.HandlerFunc {
-// 	return func(c echo.Context) error {
-// 		c.Set("db", database.DB) // Mengatur koneksi database ke konteks Echo
-// 		return next(c)
-// 	}
-// }
-
-// func AdminOnlyMiddleware(next echo.HandlerFunc) echo.HandlerFunc {
-// 	return func(c echo.Context) error {
-// 		user := c.Get("user").(*entity.User)
-// 		if user == nil || !user.IsAdmin {
-// 			return c.JSON(http.StatusUnauthorized, "Akses ditolak: Hanya admin yang dapat mengakses halaman ini.")
-// 		}
-// 		return next(c)
-// 	}
-// }
