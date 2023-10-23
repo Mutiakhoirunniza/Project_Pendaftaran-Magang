@@ -7,10 +7,11 @@ import (
 )
 
 func InitMigrationMysql(db *gorm.DB) {
-	db.AutoMigrate(&entity.User{})
-	db.AutoMigrate(&entity.Admin{})
-
-	// db.AutoMigrate(&entity.Internship{})
-	// db.AutoMigrate(&entity.ApplicationStatus{})
-	// Tambahkan migrasi 
+    db.AutoMigrate(
+        &entity.Admin{},
+        &entity.User{},
+        &entity.InternshipListing{},
+        &entity.InternshipApplicationForm{},
+        &entity.ApplicationStatus{},
+    )
 }
