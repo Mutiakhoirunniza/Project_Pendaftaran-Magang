@@ -1,38 +1,35 @@
 package routes
 
 import (
-	"miniproject/delivery/controllers"
+	"miniproject/controllers"
 
-	"github.com/labstack/echo"
+	"github.com/labstack/echo/v4"
 )
 
-func InitmyRoutes(A *controllers.AdminController, u *controllers.UserController) *echo.Echo {
-	e := echo.New()
+func InitmyRoutes(e *echo.Echo) {
+	// e := echo.New()
 
 	// Rute-rute admin
 	adminGroup := e.Group("/admin")
-	adminGroup.POST("/login", A.LoginAdmin)
-	adminGroup.GET("/admin/:id", A.GetAdminByID)
-	adminGroup.PUT("/admin/:id", A.UpdateAdmin)
-	adminGroup.DELETE("/admin/:id", A.DeleteAdmin)
-	adminGroup.POST("/internship", A.CreateInternshipListing)
-	adminGroup.POST("/application", A.CreateInternshipApplicationForm)
-	adminGroup.PUT("/updateStatus/:id", A.UpdateApplicationStatus)
-	adminGroup.PUT("/admin/verifyCancel/:id", A.VerifyCancelApplication)
+	adminGroup.POST("/login", controllers.LoginAdminController)
+	adminGroup.GET("/admin/:id", controllers.GetAdminByID)
+	adminGroup.PUT("/admin/:id", controllers.UpdateAdmin)
+	adminGroup.DELETE("/admin/:id", controllers.DeleteAdmin)
+	adminGroup.POST("/internship", controllers.CreateInternshipListing)
+	adminGroup.POST("/application", controllers.CreateInternshipApplicationForm)
+	adminGroup.PUT("/updateStatus/:id", controllers.UpdateApplicationStatus)
+	adminGroup.PUT("/admin/verifyCancel/:id", controllers.VerifyCancelApplication)
 
 	// Route untuk registrasi
 	userGroup := e.Group("/user")
-	userGroup.POST("/register", u.Register)
-	userGroup.POST("/login", u.Login)
-	userGroup.PUT("/profile", u.UpdateProfile)
-	userGroup.POST("/profilePicture", u.UploadProfilePicture)
-	userGroup.GET("/users", u.GetAllUsers)
-	userGroup.GET("/users/:id", u.GetUserByID)
-	userGroup.DELETE("/users/:id", u.DeleteUserByID)
-	userGroup.GET("/internshipListings", u.GetInternshipListings)
-	userGroup.POST("/internship/:id", u.ChooseInternshipListing)
-	userGroup.GET("/ApplicationStatus", u.GetApplicationStatus)
-	userGroup.POST("/cancelApplication/:id", u.CancelApplication)
-
-	return e
+	userGroup.POST("/register", controllers.Register)
+	userGroup.POST("/login", controllers.LoginUserController)
+	userGroup.PUT("/profilePicture", controllers.UpdateProfileAndUploadPicture)
+	userGroup.GET("/users", controllers.GetAllUsers)
+	userGroup.GET("/users/:id", controllers.GetUserByID)
+	userGroup.DELETE("/users/:id", controllers.DeleteUserByID)
+	userGroup.GET("/internshipListings", controllers.GetInternshipListings)
+	userGroup.POST("/internship/:id", controllers.ChooseInternshipListing)
+	userGroup.GET("/ApplicationStatus", controllers.GetApplicationStatus)
+	userGroup.POST("/cancelApplication/:id", controllers.CancelApplication)
 }
