@@ -6,7 +6,33 @@ import (
 
 	"github.com/joho/godotenv"
 	"github.com/sirupsen/logrus"
+	"gorm.io/gorm"
 )
+
+var (
+	DB *gorm.DB
+)
+
+type AppConfig struct {
+	SERVERPORT int
+	DBPORT     int
+	DBHOST     string
+	DBUSER     string
+	DBPASS     string
+	DBNAME     string
+}
+
+func InitConfig() *AppConfig {
+	var res = new(AppConfig)
+	res = loadConfig()
+
+	if res == nil {
+		logrus.Fatal("Config : Cannot start program, failed to load configuration")
+		return nil
+	}
+
+	return res
+}
 
 func loadConfig() *AppConfig {
 	var res = new(AppConfig)
@@ -53,4 +79,5 @@ func loadConfig() *AppConfig {
 	}
 
 	return res
+
 }

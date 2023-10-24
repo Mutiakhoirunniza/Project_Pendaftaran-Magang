@@ -1,9 +1,8 @@
 package migration
 
 import (
-	"miniproject/entity"
-
-	"gorm.io/gorm"
+    "miniproject/entity"
+    "gorm.io/gorm"
 )
 
 func InitMigrationMysql(db *gorm.DB) {
@@ -15,3 +14,4 @@ func InitMigrationMysql(db *gorm.DB) {
         &entity.ApplicationStatus{},
     )
 }
+
