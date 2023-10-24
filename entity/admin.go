@@ -4,8 +4,16 @@ import "gorm.io/gorm"
 
 type Admin struct {
 	gorm.Model
-	ID       int    `json:"id" form:"id"`
-	Username string `json:"username" form:"username"`
-	Password string `json:"password" form:"password"`
-	Email    string `json:"email" form:"email"`
+	ID       uint   `json:"id" gorm:"primary_key"`
+	Username string `json:"username"`
+	Email    string `json:"email"`
+	Password string `json:"password"`
+}
+
+
+type AdminResponse struct {
+	ID       uint   `json:"id"`
+	Username string `json:"username"`
+	Email    string `json:"email"`
+	Token    string `json:"token"`
 }
