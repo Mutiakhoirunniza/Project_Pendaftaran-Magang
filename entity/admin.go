@@ -2,18 +2,18 @@ package entity
 
 import "gorm.io/gorm"
 
+
 type Admin struct {
-	gorm.Model
-	ID       uint   `json:"id" gorm:"primary_key"`
-	Username string `json:"username"`
-	Email    string `json:"email"`
-	Password string `json:"password"`
+    gorm.Model
+    Username            string                 `json:"username"`
+    Email               string                 `json:"email"`
+    Password            string                 `json:"password"`
+    IsAdmin             bool    `gorm:"default:false" json:"isAdmin"`
+	IsVerified          bool    `gorm:"default:false" json:"is_verified"`
 }
 
 
-type AdminResponse struct {
-	ID       uint   `json:"id"`
-	Username string `json:"username"`
-	Email    string `json:"email"`
-	Token    string `json:"token"`
+type AdminErrorResponse struct {
+	Code    int    `json:"code"`
+	Message string `json:"message"`
 }
