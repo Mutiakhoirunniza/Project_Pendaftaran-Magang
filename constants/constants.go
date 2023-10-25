@@ -8,5 +8,4 @@ const (
 	StatusCanceled    = "canceled"
 
 	SecretKey = "kuncirahasia"
-
 )
