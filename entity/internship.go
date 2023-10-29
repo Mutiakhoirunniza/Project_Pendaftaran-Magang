@@ -1,59 +1,37 @@
 package entity
 
 import (
-	"time"
-
 	"gorm.io/gorm"
 )
 
 type Internship_Listing struct {
-    gorm.Model
-    Title                  string                       `json:"title"`
-    Description            string                       `json:"description"`
-    Quota                  int                          `json:"quota"`
-    ApplicationForms       []Internship_ApplicationForm `gorm:"foreignKey:InternshipListingID" json:"application_forms"`
-    InternshipApplications []Internship_ApplicationForm `gorm:"foreignKey:InternshipListingID" json:"internship_applications"`
-    SelectedCandidates     []Selected_Candidate         `gorm:"many2many:selected_candidates" json:"selected_candidates"`
-    StatusPendaftaran      string                       `json:"status_pendaftaran"`
-    StartDate              time.Time                    `json:"start_date"`
-    EndDate                time.Time                    `json:"end_date"`
-}
-
-type Selected_Candidate struct {
-	UserId 		int
-	CandidateID  int
-	InternshipID uint
+	gorm.Model
+	Title            string                       `json:"title" form:"title"`
+	Description      string                       `json:"description" form:"description"`
+	Quota            int                          `json:"quota" form:"quota"`
+	StartDate        string                       `json:"start_date" form:"start_date"`
+	EndDate          string                       `json:"end_date" form:"end_date"`
+	ApplicationForms []Internship_ApplicationForm `gorm:"foreignKey:InternshipListingID" json:"applicationforms" form:"applicationforms"`
 }
 
 type Internship_ApplicationForm struct {
-	UserID 				int
-	AdminApproval 		bool
-	AdminUserID 		int 
-	InternshipListingID int                  `json:"internship_listing_id"`
-	ApplicationStatusID uint                 `json:"application_status_id"`
-	ApplicationStatus   Application_Status   `gorm:"foreignKey:ApplicationStatusID" json:"application_status"`
-	// SelectedListings    []Internship_Listing `gorm:"many2many:application_form_selected_listings" json:"selected_listings"`
-	// AdminID             uint                 `json:"admin_id" form:"admin_id"`
-	CV                  string               `json:"cv" form:"cv"`
-	Status              string               `json:"status" form:"status"`
-	FirstName           string               `json:"first_name" form:"first_name"`
-	LastName            string               `json:"last_name" form:"last_name"`
-	Email               string               `json:"email" form:"email"`
-	Gender              string               `json:"gender" form:"gender"`
-	PhoneNumber         string               `json:"phone_number" form:"phone_number"`
-	Address             string               `json:"address" form:"address"`
-	City                string               `json:"city" form:"city"`
-	State               string               `json:"state" form:"state"`
-	PostalCode          string               `json:"postal_code" form:"postal_code"`
-	DateOfBirth         string               `json:"date_of_birth" form:"date_of_birth"`
-	UniversityOrigin    string               `json:"university_origin" form:"university_origin"`
-	UniversityAddress   string               `json:"university_address" form:"university_address"`
-	NIM                 string               `json:"nim" form:"nim"`
+	gorm.Model
+	CV                  string  `json:"cv" form:"cv"`
+	Nim                 string               `json:"nim" form:"nim"`
 	GPA                 float64              `json:"gpa" form:"gpa"`
 	EducationLevel      string               `json:"education_level" form:"education_level"`
+	UserID              int                  `json:"UserID " form:"UserID"`
+	Status              string               `json:"status"`
+	UserEmail           string               `json:"user_email" form:"user_email" gorm:"not null"`
+	Username            string               `json:"username" form:"username" gorm:"not null"`
+	SelectedTitle       string               `json:"selected_title" form:"selected_title"`
+	IsCanceled          bool                 `json:"is_canceled" form:"is_canceled"`
+	InternshipListingID uint                 `json:"internshiplistingID" form:"internshiplistingID" gorm:"not null"`
+	Selected_Candidates []Selected_Candidate `gorm:"foreignKey:InternshipApplicationFormID" json:"selected_candidates" form:"selected_candidates"`
 }
 
-type Application_Status struct {
+type Selected_Candidate struct {
 	gorm.Model
-	Status string `json:"status" form:"status"`
+	InternshipApplicationFormID uint
+	InternshipApplicationForm   Internship_ApplicationForm `gorm:"foreignKey:InternshipApplicationFormID"`
 }

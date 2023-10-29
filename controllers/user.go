@@ -51,6 +51,7 @@ func RegisterUser(c echo.Context) error {
 		"user":    user,
 	})
 }
+
 // Fungsi LoginUserController digunakan untuk mengautentikasi pengguna dan memberikan token akses jika berhasil.
 func LoginUserController(c echo.Context) error {
 	// Membuat instance pengguna dan mengikat data dari permintaan HTTP
@@ -94,6 +95,7 @@ func LoginUserController(c echo.Context) error {
 		"user":    UserResponse,
 	})
 }
+
 // GetAllUsers digunakan untuk mendapatkan semua data pengguna.
 func GetAllUsers(c echo.Context) error {
 	var users []entity.User
@@ -106,6 +108,7 @@ func GetAllUsers(c echo.Context) error {
 		"users":   users,
 	})
 }
+
 // GetUserByID digunakan untuk mendapatkan data pengguna berdasarkan ID.
 func GetUserByID(c echo.Context) error {
 	idStr := c.Param("id")
@@ -124,6 +127,7 @@ func GetUserByID(c echo.Context) error {
 		"user":    user,
 	})
 }
+
 // Fungsi UpdateUserByID digunakan untuk memperbarui data pengguna berdasarkan ID.
 func UpdateUserByID(c echo.Context) error {
 	// Mendapatkan ID pengguna dari parameter rute
@@ -170,6 +174,7 @@ func UpdateUserByID(c echo.Context) error {
 		"user":    existingUser,
 	})
 }
+
 // Menghapus data user berdasarkan ID
 func DeleteUser(c echo.Context) error {
 	IdStr := c.Param("id")
@@ -266,6 +271,7 @@ func ApplyForInternship(c echo.Context) error {
 	// Simpan aplikasi ke dalam database
 	application := entity.Internship_ApplicationForm{
 		Model:               gorm.Model{},
+		CV:                  formData.CV,
 		Nim:                 formData.Nim,
 		GPA:                 formData.GPA,
 		EducationLevel:      formData.EducationLevel,
@@ -310,7 +316,7 @@ func ApplyForInternship(c echo.Context) error {
 
 	// Membuat dan menyimpan Selected_Candidate
 	selectedCandidate := entity.Selected_Candidate{
-		Model:                       gorm.Model{
+		Model: gorm.Model{
 			ID:        selectedListingID,
 			CreatedAt: time.Time{},
 			UpdatedAt: time.Time{},
@@ -333,93 +339,87 @@ func ApplyForInternship(c echo.Context) error {
 }
 // CancelApplication digunakan untuk membatalkan formulir aplikasi berdasarkan ID.
 func CancelApplication(c echo.Context) error {
-    // Mendapatkan ID formulir aplikasi yang ingin dibatalkan dari parameter URL
-    idParam := c.Param("id")
+	// Mendapatkan ID formulir aplikasi yang ingin dibatalkan dari parameter URL
+	idParam := c.Param("id")
 
-    // Mengonversi ID menjadi tipe data uint
-    id, err := strconv.ParseUint(idParam, 10, 64)
-    if err != nil {
-        return c.JSON(http.StatusBadRequest, map[string]interface{}{
-            "message": "ID tidak valid",
-        })
-    }
+	// Mengonversi ID menjadi tipe data uint
+	id, err := strconv.ParseUint(idParam, 10, 64)
+	if err != nil {
+		return c.JSON(http.StatusBadRequest, map[string]interface{}{
+			"message": "ID tidak valid",
+		})
+	}
 
-    // Cari formulir aplikasi berdasarkan ID
-    var application entity.Internship_ApplicationForm
-    if err := config.DB.Where("id = ?", id).First(&application).Error; err != nil {
-        return c.JSON(http.StatusNotFound, map[string]interface{}{
-            "message": "Formulir aplikasi tidak ditemukan",
-        })
-    }
+	// Cari formulir aplikasi berdasarkan ID
+	var application entity.Internship_ApplicationForm
+	if err := config.DB.Where("id = ?", id).First(&application).Error; err != nil {
+		return c.JSON(http.StatusNotFound, map[string]interface{}{
+			"message": "Formulir aplikasi tidak ditemukan",
+		})
+	}
 
-    // Periksa apakah formulir aplikasi sudah dibatalkan sebelumnya
-    if application.IsCanceled {
-        return c.JSON(http.StatusBadRequest, map[string]interface{}{
-            "message": "Formulir aplikasi sudah dibatalkan sebelumnya",
-        })
-    }
+	// Periksa apakah formulir aplikasi sudah dibatalkan sebelumnya
+	if application.IsCanceled {
+		return c.JSON(http.StatusBadRequest, map[string]interface{}{
+			"message": "Formulir aplikasi sudah dibatalkan sebelumnya",
+		})
+	}
 
-    // Mengubah status formulir menjadi "Dibatalkan" dan menyimpan perubahan ke database
-    application.Status = "Dibatalkan"
-    application.IsCanceled = true
-    if err := config.DB.Save(&application).Error; err != nil {
-        return c.JSON(http.StatusInternalServerError, map[string]interface{}{
-            "message": "Gagal membatalkan formulir aplikasi",
-            "error":   err.Error(),
-        })
-    }
+	// Mengubah status formulir menjadi "Dibatalkan" dan menyimpan perubahan ke database
+	application.Status = "Dibatalkan"
+	application.IsCanceled = true
+	if err := config.DB.Save(&application).Error; err != nil {
+		return c.JSON(http.StatusInternalServerError, map[string]interface{}{
+			"message": "Gagal membatalkan formulir aplikasi",
+			"error":   err.Error(),
+		})
+	}
 
-    // Mengembalikan kuota penawaran magang
-    var internshipListing entity.Internship_Listing
-    if err := config.DB.First(&internshipListing, application.InternshipListingID).Error; err != nil {
-        return c.JSON(http.StatusBadRequest, map[string]interface{}{
-            "message": "Penawaran magang tidak ditemukan",
-        })
-    }
+	// Mengembalikan kuota penawaran magang
+	var internshipListing entity.Internship_Listing
+	if err := config.DB.First(&internshipListing, application.InternshipListingID).Error; err != nil {
+		return c.JSON(http.StatusBadRequest, map[string]interface{}{
+			"message": "Penawaran magang tidak ditemukan",
+		})
+	}
 
-    internshipListing.Quota++
-    if err := config.DB.Save(&internshipListing).Error; err != nil {
-        return c.JSON(http.StatusInternalServerError, map[string]interface{}{
-            "message": "Gagal memproses pembatalan formulir aplikasi",
-            "error":   err.Error(),
-        })
-    }
+	internshipListing.Quota++
+	if err := config.DB.Save(&internshipListing).Error; err != nil {
+		return c.JSON(http.StatusInternalServerError, map[string]interface{}{
+			"message": "Gagal memproses pembatalan formulir aplikasi",
+			"error":   err.Error(),
+		})
+	}
 
-    return c.JSON(http.StatusOK, map[string]interface{}{
-        "message": "Formulir aplikasi berhasil dibatalkan",
-    })
+	return c.JSON(http.StatusOK, map[string]interface{}{
+		"message": "Formulir aplikasi berhasil dibatalkan",
+	})
 }
+
 // GetApplicationStatus digunakan untuk mendapatkan status formulir aplikasi berdasarkan ID.
 func GetApplicationStatus(c echo.Context) error {
-    // Mendapatkan ID dari parameter URL
-    idParam := c.Param("id")
+	// Mendapatkan ID dari parameter URL
+	idParam := c.Param("id")
 
-    // Mengonversi ID menjadi tipe data uint
-    id, err := strconv.ParseUint(idParam, 10, 64)
-    if err != nil {
-        return c.JSON(http.StatusBadRequest, map[string]interface{}{
-            "message": "ID tidak valid",
-        })
-    }
+	// Mengonversi ID menjadi tipe data uint
+	id, err := strconv.ParseUint(idParam, 10, 64)
+	if err != nil {
+		return c.JSON(http.StatusBadRequest, map[string]interface{}{
+			"message": "ID tidak valid",
+		})
+	}
 
-    // Cari form aplikasi berdasarkan ID
-    var application entity.Internship_ApplicationForm
-    if err := config.DB.Where("id = ?", id).First(&application).Error; err != nil {
-        return c.JSON(http.StatusNotFound, map[string]interface{}{
-            "message": "Form aplikasi tidak ditemukan",
-        })
-    }
+	// Cari form aplikasi berdasarkan ID
+	var application entity.Internship_ApplicationForm
+	if err := config.DB.Where("id = ?", id).First(&application).Error; err != nil {
+		return c.JSON(http.StatusNotFound, map[string]interface{}{
+			"message": "Form aplikasi tidak ditemukan",
+		})
+	}
 
-    // Anda dapat mengakses status aplikasi melalui application.Status
-    return c.JSON(http.StatusOK, map[string]interface{}{
-        "message": "Status form aplikasi",
-        "status":  application.Status,
-    })
+	// Anda dapat mengakses status aplikasi melalui application.Status
+	return c.JSON(http.StatusOK, map[string]interface{}{
+		"message": "Status form aplikasi",
+		"status":  application.Status,
+	})
 }
-
-
-
-
-
-
-

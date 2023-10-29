@@ -8,11 +8,9 @@ import (
 func InitMigrationMysql(db *gorm.DB) {
     db.AutoMigrate(
         &entity.User{},
-        &entity.Admin{}, 
+        &entity.Admin{},
         &entity.Internship_Listing{}, 
-        &entity.Selected_Candidate{}, 
         &entity.Internship_ApplicationForm{}, 
-        &entity.Application_Status{},
-    )
+        &entity.Selected_Candidate{})
 }
 

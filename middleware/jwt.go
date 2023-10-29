@@ -2,122 +2,90 @@ package middleware
 
 import (
 	"errors"
-	"fmt"
 	"miniproject/constants"
-	"net/http"
 	"time"
 
 	"github.com/golang-jwt/jwt"
 	"github.com/labstack/echo/v4"
+	"github.com/labstack/echo/v4/middleware"
 )
 
-func GenerateJWTToken(username string) (string, error) {
-	// Menyiapkan claim (klaim) token
-	claims := jwt.MapClaims{
-		"username": username,
-		"exp":      0, // Token tidak memiliki masa berlaku
+type CustomClaims struct {
+	ID       uint   `json:"id"`
+	Username string `json:"username"`
+	Role     string `json:"role"`
+	jwt.StandardClaims
+}
+
+//	func JWTMiddleware() echo.MiddlewareFunc {
+//		return echojwt.WithConfig(echojwt.Config{
+//			SigningKey:    []byte(constants.SecretKey),
+//			SigningMethod: "HS256",
+//		})
+//	}
+func JWTMiddleware() echo.MiddlewareFunc {
+	return middleware.JWTWithConfig(middleware.JWTConfig{
+		SigningKey: []byte(constants.SecretKey),
+	})
+}
+
+func CreateToken(username string, role string) (string, error) {
+	now := time.Now()
+	claims := CustomClaims{
+		Username: username,
+		Role:     role,
+		StandardClaims: jwt.StandardClaims{
+			ExpiresAt: now.Add(time.Hour * 24 * 7).Unix(),
+			Issuer:    "miniproject",
+		},
 	}
-
-	// Membuat token dengan claim
 	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
-
-	// Menandatangani token dengan secret key
-	secretKey := []byte(constants.SecretKey)
-	tokenString, err := token.SignedString(secretKey)
+	tokenString, err := token.SignedString([]byte(constants.SecretKey))
 	if err != nil {
 		return "", err
 	}
-
 	return tokenString, nil
 }
 
-// JWTMiddleware adalah middleware Echo untuk otentikasi dengan JWT
-func JWTMiddleware() echo.MiddlewareFunc {
-	return func(next echo.HandlerFunc) echo.HandlerFunc {
-		return func(c echo.Context) error {
-			tokenString := c.Request().Header.Get("Authorization")
-			if tokenString == "" {
-				return echo.NewHTTPError(http.StatusUnauthorized, "Token JWT tidak ditemukan")
-			}
-
-			// Parse token
-			token, err := jwt.Parse(tokenString, func(token *jwt.Token) (interface{}, error) {
-				// Pastikan Anda menggunakan kunci yang sesuai dengan yang digunakan saat membuat token
-				return []byte(constants.SecretKey), nil
-			})
-			if err != nil {
-				return echo.NewHTTPError(http.StatusUnauthorized, "Token JWT tidak valid")
-			}
-
-			if !token.Valid {
-				return echo.NewHTTPError(http.StatusUnauthorized, "Token JWT tidak valid")
-			}
-
-			// Mengekstrak klaim (claims) dari token
-			claims, ok := token.Claims.(jwt.MapClaims)
-			if !ok {
-				return echo.NewHTTPError(http.StatusUnauthorized, "Token JWT tidak mengandung klaim yang valid")
-			}
-
-			// Mengekstrak ID pengguna dari klaim (asumsi ID disimpan dalam klaim "sub")
-			userID, ok := claims["sub"].(string)
-			if !ok || userID == "" {
-				return echo.NewHTTPError(http.StatusUnauthorized, "Tidak dapat menemukan ID pengguna dalam token JWT")
-			}
-
-			// Set userID dalam konteks Echo sehingga dapat diakses di handler selanjutnya
-			c.Set("userID", userID)
-			return next(c)
-		}
+func ExtractTokenAdmin(c echo.Context) (string, error) {
+	adminToken := c.Get("admin")
+	if adminToken == nil {
+		return "", errors.New("Admin token not found in context")
 	}
+	token, ok := adminToken.(*jwt.Token)
+	if !ok {
+		return "", errors.New("Invalid admin token in context")
+	}
+
+	claims, ok := token.Claims.(*CustomClaims)
+	if !ok {
+		return "", errors.New("Invalid claims in token")
+	}
+
+	if claims.Role != "admin" {
+		return "", errors.New("Not an admin")
+	}
+
+	return claims.Username, nil
 }
 
-func GetUserIDFromToken(c echo.Context) (string, error) {
-	token := c.Request().Header.Get("Authorization")
-	if token == "" {
-		return "", errors.New("Token tidak ada")
+func ExtractTokenUser(c echo.Context) (string, error) {
+	UserToken := c.Get("user")
+	if UserToken == nil {
+		return "", errors.New("User token not found in context")
+	}
+	token, ok := UserToken.(*jwt.Token)
+	if !ok {
+		return "", errors.New("Invalid User token in context")
 	}
 
-	claims, err := verifyJWTToken(token)
-	if err != nil {
-		return "", err
+	claims, ok := token.Claims.(*CustomClaims)
+	if !ok {
+		return "", errors.New("Invalid claims in token")
 	}
 
-	// Ambil ID pengguna dari klaim token JWT
-	userID, ok := claims["sub"].(string)
-	if !ok || userID == "" {
-		return "", errors.New("Token tidak berisi ID pengguna")
+	if claims.Role != "user" {
+		return "", errors.New("Not an user")
 	}
-
-	return userID, nil
-}
-
-func verifyJWTToken(tokenString string) (jwt.MapClaims, error) {
-	secretKey := []byte(constants.SecretKey)
-
-	token, err := jwt.Parse(tokenString, func(token *jwt.Token) (interface{}, error) {
-		if _, ok := token.Method.(*jwt.SigningMethodHMAC); !ok {
-			return nil, fmt.Errorf("Metode penandatanganan token tidak valid")
-		}
-		return secretKey, nil
-	})
-
-	if err != nil {
-		return nil, err
-	}
-
-	if claims, ok := token.Claims.(jwt.MapClaims); ok && token.Valid {
-		return claims, nil
-	}
-
-	if claims, ok := token.Claims.(jwt.MapClaims); ok && token.Valid {
-		// Periksa apakah token telah kedaluwarsa
-		exp, ok := claims["exp"].(float64)
-		if !ok || int64(exp) < time.Now().Unix() {
-			return nil, fmt.Errorf("Token JWT telah kedaluwarsa")
-		}
-		return claims, nil
-	}
-
-	return nil, fmt.Errorf("Token JWT tidak valid")
+	return claims.Username, nil
 }

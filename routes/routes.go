@@ -2,34 +2,45 @@ package routes
 
 import (
 	"miniproject/controllers"
+	"miniproject/middleware"
 
 	"github.com/labstack/echo/v4"
 )
 
-func InitmyRoutes(e *echo.Echo) {
-	// e := echo.New()
+func InitmyRoutes() *echo.Echo {
+	e := echo.New()
+	middleware.LogMiddleware(e)
 
 	// Rute-rute admin
 	adminGroup := e.Group("/admin")
 	adminGroup.POST("/login", controllers.LoginAdminController)
-	adminGroup.GET("/admin/:id", controllers.GetAdminByID)
-	adminGroup.PUT("/admin/:id", controllers.UpdateAdmin)
-	adminGroup.DELETE("/admin/:id", controllers.DeleteAdmin)
-	adminGroup.POST("/internship", controllers.CreateInternshipListing)
-	adminGroup.POST("/application", controllers.CreateInternshipApplicationForm)
-	adminGroup.PUT("/updateStatus/:id", controllers.UpdateApplicationStatus)
-	adminGroup.PUT("/admin/verifyCancel/:id", controllers.VerifyCancelApplication)
+	adminGroup.GET("/:id", controllers.GetAdminByID, middleware.JWTMiddleware())
+	adminGroup.PUT("/:id", controllers.UpdateAdminController, middleware.JWTMiddleware())
+	// internship admin
+	adminGroup.POST("/internship", controllers.CreateInternshipListing, middleware.JWTMiddleware())
+	adminGroup.PUT("/internship/:id", controllers.UpdateInternshipListingByID, middleware.JWTMiddleware())
+	adminGroup.DELETE("/internship/:id", controllers.DeleteInternshipListingByID, middleware.JWTMiddleware())
+	adminGroup.GET("/selected-candidates/:id", controllers.SelectCandidatesByGPAID, middleware.JWTMiddleware())
+	adminGroup.GET("/candidates", controllers.ViewAllCandidates, middleware.JWTMiddleware())
+	adminGroup.POST("/email", controllers.SendEmailHandler, middleware.JWTMiddleware())
 
-	// Route untuk registrasi
-	userGroup := e.Group("/user")
-	userGroup.POST("/register", controllers.Register)
+	// Route untuk User
+	userGroup := e.Group("/users")
+	userGroup.POST("/register", controllers.RegisterUser)
 	userGroup.POST("/login", controllers.LoginUserController)
-	userGroup.PUT("/profilePicture", controllers.UpdateProfileAndUploadPicture)
-	userGroup.GET("/users", controllers.GetAllUsers)
-	userGroup.GET("/users/:id", controllers.GetUserByID)
-	userGroup.DELETE("/users/:id", controllers.DeleteUserByID)
-	userGroup.GET("/internshipListings", controllers.GetInternshipListings)
-	userGroup.POST("/internship/:id", controllers.ChooseInternshipListing)
-	userGroup.GET("/ApplicationStatus", controllers.GetApplicationStatus)
-	userGroup.POST("/cancelApplication/:id", controllers.CancelApplication)
+	userGroup.GET("/all", controllers.GetAllUsers, middleware.JWTMiddleware())
+	userGroup.GET("/:id", controllers.GetUserByID, middleware.JWTMiddleware())
+	userGroup.PUT("/:id", controllers.UpdateUserByID, middleware.JWTMiddleware())
+	userGroup.DELETE("/:id", controllers.DeleteUser, middleware.JWTMiddleware())
+	// internship user
+	userGroup.GET("/internship-listings", controllers.GetInternshipListings, middleware.JWTMiddleware())
+	userGroup.POST("/apply-for-internship", controllers.ApplyForInternship, middleware.JWTMiddleware())
+	userGroup.DELETE("/apply-for-internship", controllers.CancelApplication, middleware.JWTMiddleware())
+	userGroup.GET("/Application-Status/:id", controllers.GetApplicationStatus, middleware.JWTMiddleware())
+
+	internshipsUsecase := controllers.NewInternshipsUsecase()
+	e.POST("/applyInternship", func(c echo.Context) error {
+		return controllers.ApplyInternship(c, internshipsUsecase)
+	})
+	return e
 }
