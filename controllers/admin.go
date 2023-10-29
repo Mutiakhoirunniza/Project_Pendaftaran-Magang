@@ -117,7 +117,7 @@ func UpdateAdminController(c echo.Context) error {
 }
 
 
-// internship
+// semua data internships admin
 
 // Membuat lowongan magang baru
 func CreateInternshipListing(c echo.Context) error {
@@ -281,7 +281,7 @@ func ViewAllCandidates(c echo.Context) error {
         return c.JSON(http.StatusInternalServerError, map[string]interface{}{"error": err.Error()})
     }
 
-	
+
     // Menampilkan daftar kandidat
     return c.JSON(http.StatusOK, candidates)
 }
