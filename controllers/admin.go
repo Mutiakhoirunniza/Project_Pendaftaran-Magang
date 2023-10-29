@@ -286,3 +286,7 @@ func ViewAllCandidates(c echo.Context) error {
 }
 
 
+
+
+
+
