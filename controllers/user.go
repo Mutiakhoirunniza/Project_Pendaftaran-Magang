@@ -1,156 +1,99 @@
 package controllers
 
 import (
-	"context"
-	"io"
+	"fmt"
+	"log"
+	"miniproject/constants"
 	"miniproject/entity"
 	"miniproject/infra/config"
 	"miniproject/middleware"
 	"net/http"
-	"path/filepath"
 	"strconv"
-	"strings"
+	"time"
 
-	"cloud.google.com/go/storage"
 	"github.com/labstack/echo/v4"
+	"gorm.io/gorm"
 )
 
-// Register digunakan untuk mendaftarkan pengguna baru.
-func Register(c echo.Context) error {
-	user := entity.User{}
-	c.Bind(&user)
+// akun pengguna
 
-	if err := config.DB.Save(&user).Error; err != nil {
-		return echo.NewHTTPError(http.StatusBadRequest, err.Error())
+// Fungsi RegisterUser digunakan untuk mendaftarkan pengguna baru.
+func RegisterUser(c echo.Context) error {
+	user := entity.User{}
+	if err := c.Bind(&user); err != nil {
+		return c.JSON(http.StatusBadRequest, map[string]interface{}{
+			"message": "Invalid user data",
+			"error":   err.Error(),
+		})
 	}
 
+	// Cek apakah pengguna sudah terdaftar berdasarkan alamat email
+	var existingUser entity.User
+	err := config.DB.Where("email = ?", user.Email).First(&existingUser).Error
+	if err == nil {
+		return c.JSON(http.StatusBadRequest, map[string]interface{}{
+			"message": constants.ErrUserAlreadyExists,
+		})
+	}
+
+	// Jika pengguna belum terdaftar, simpan data pendaftaran ke dalam basis data
+	err = config.DB.Create(&user).Error
+	if err != nil {
+		return c.JSON(http.StatusInternalServerError, map[string]interface{}{
+			"message": constants.ErrFailedToRegister,
+			"error":   err.Error(),
+		})
+	}
+
+	// Mengirim respons HTTP berhasil setelah pengguna berhasil didaftarkan
 	return c.JSON(http.StatusOK, map[string]interface{}{
-		"message": "success create new user",
+		"message": "Success create new user",
 		"user":    user,
 	})
 }
-
-// Login digunakan untuk melakukan proses login pengguna.
+// Fungsi LoginUserController digunakan untuk mengautentikasi pengguna dan memberikan token akses jika berhasil.
 func LoginUserController(c echo.Context) error {
-	User := entity.User{}
-	c.Bind(&User)
-
-	err := config.DB.Where("email = ? AND password = ?", User.Email, User.Password).First(&User).Error
-	if err != nil {
+	// Membuat instance pengguna dan mengikat data dari permintaan HTTP
+	user := entity.User{}
+	if err := c.Bind(&user); err != nil {
 		return c.JSON(http.StatusBadRequest, map[string]interface{}{
-			"message": "Fail login",
-			"error":   err.Error(),
-		})
-	}
-	token, err := middleware.GenerateJWTToken(User.Username)
-	if err != nil {
-		return c.JSON(http.StatusBadRequest, map[string]interface{}{
-			"message": "Fail login",
+			"message": "Fail to parse request body",
 			"error":   err.Error(),
 		})
 	}
 
+	// Mencari pengguna dalam basis data berdasarkan email dan kata sandi
+	err := config.DB.Where("email = ? AND password = ?", user.Email, user.Password).First(&user).Error
+	if err != nil {
+		return c.JSON(http.StatusUnauthorized, map[string]interface{}{
+			"message": constants.ErrFailedToLogIn,
+			"error":   err.Error(),
+		})
+	}
+
+	// Menghasilkan token akses untuk pengguna
+	username := "user"
+	role := "user"
+	token, err := middleware.CreateToken(username, role)
+	if err != nil {
+		return c.JSON(http.StatusInternalServerError, map[string]interface{}{
+			"message": constants.ErrTokenCreationFailed,
+			"error":   err.Error(),
+		})
+	}
+	c.Set("user", token)
 	UserResponse := entity.UserResponse{
-		ID:      int(User.ID),
-		Username: User.Username,
-		Email:    User.Email,
-		Token:    token,
+		ID:    user.ID,
+		Name:  user.Username,
+		Email: user.Email,
+		Token: token,
 	}
 
 	return c.JSON(http.StatusOK, map[string]interface{}{
-		"message": "success login",
+		"message": "Success login",
 		"user":    UserResponse,
 	})
 }
-
-// UpdateProfile digunakan untuk mengupdate profil pengguna.
-func UpdateProfileAndUploadPicture(c echo.Context) error {
-	userID, err := middleware.GetUserIDFromToken(c)
-	if err != nil {
-		return c.JSON(http.StatusUnauthorized, map[string]string{"message": "Invalid JWT token"})
-	}
-
-	email := c.FormValue("email")
-	gender := c.FormValue("gender")
-	phoneNumber := c.FormValue("phone_number")
-	universityName := c.FormValue("university_name")
-	universityAddress := c.FormValue("university_address")
-	major := c.FormValue("major")
-
-	// Validasi input
-	if email == "" || gender == "" || major == "" || len(email) > 100 {
-		return c.JSON(http.StatusBadRequest, map[string]string{"message": "Invalid input data"})
-	}
-
-	// Update the user's profile data in the database
-	user := &entity.User{}
-	if err := config.DB.Model(user).Where("id = ?", userID).Updates(map[string]interface{}{
-		"email":              email,
-		"gender":             gender,
-		"phone_number":       phoneNumber,
-		"university_name":    universityName,
-		"university_address": universityAddress,
-		"major":              major,
-	}).Error; err != nil {
-		return c.JSON(http.StatusInternalServerError, map[string]string{"message": "An error occurred while updating profile"})
-	}
-
-	// Handle profile picture upload
-	file, err := c.FormFile("profile_picture")
-	if err == nil {
-		// Periksa jenis file
-		ext := strings.ToLower(filepath.Ext(file.Filename))
-        if ext != ".jpg" && ext != ".jpeg" && ext != ".png" && ext != ".gif" {
-            return c.JSON(http.StatusBadRequest, "Uploaded file must be an image")
-        }
-		// Periksa ukuran file (maksimal 3MB)
-		maxSize := int64(3 * 1024 * 1024)
-		if file.Size > maxSize {
-			return c.JSON(http.StatusBadRequest, "File size is too large (maximum 3MB)")
-		}
-
-		// Baca file gambar
-		src, err := file.Open()
-		if err != nil {
-			return c.JSON(http.StatusInternalServerError, "Failed to open image file")
-		}
-		defer src.Close()
-
-		// Inisialisasi koneksi ke GCS
-		ctx := context.Background()
-		client, err := storage.NewClient(ctx)
-		if err != nil {
-			return c.JSON(http.StatusInternalServerError, map[string]string{"message": "Failed to connect to GCS"})
-		}
-		defer client.Close()
-
-		// Simpan file gambar di GCS
-		bucketName := "krisnadwipayana" // Ganti dengan nama bucket GCS Anda
-		objectName := "foto/" + file.Filename
-
-		wc := client.Bucket(bucketName).Object(objectName).NewWriter(ctx)
-		if _, err := io.Copy(wc, src); err != nil {
-			wc.Close()
-			return c.JSON(http.StatusInternalServerError, map[string]string{"message": "Failed to upload photo to GCS"})
-		}
-		wc.Close()
-
-		// Simpan URL GCS ke dalam entitas User
-		foto := "https://storage.googleapis.com/" + bucketName + "/" + objectName
-		user.ProfilePicture = foto
-
-		// Simpan perubahan pada entitas User ke dalam database
-		if err := config.DB.Save(user).Error; err != nil {
-			return c.JSON(http.StatusInternalServerError, map[string]string{"message": "Failed to save profile picture URL"})
-		}
-
-		// Return the URL of the uploaded profile picture
-		return c.JSON(http.StatusOK, map[string]string{"message": "Profile updated successfully", "image_url": foto})
-	}
-
-	return c.JSON(http.StatusOK, map[string]string{"message": "Profile updated successfully"})
-}
-
 // GetAllUsers digunakan untuk mendapatkan semua data pengguna.
 func GetAllUsers(c echo.Context) error {
 	var users []entity.User
@@ -163,7 +106,6 @@ func GetAllUsers(c echo.Context) error {
 		"users":   users,
 	})
 }
-
 // GetUserByID digunakan untuk mendapatkan data pengguna berdasarkan ID.
 func GetUserByID(c echo.Context) error {
 	idStr := c.Param("id")
@@ -182,225 +124,302 @@ func GetUserByID(c echo.Context) error {
 		"user":    user,
 	})
 }
-
-// DeleteUserByID digunakan untuk menghapus pengguna berdasarkan ID.
-func DeleteUserByID(c echo.Context) error {
-	idStr := c.Param("id")
-	id, err := strconv.Atoi(idStr)
+// Fungsi UpdateUserByID digunakan untuk memperbarui data pengguna berdasarkan ID.
+func UpdateUserByID(c echo.Context) error {
+	// Mendapatkan ID pengguna dari parameter rute
+	IdStr := c.Param("id")
+	Id, err := strconv.Atoi(IdStr)
 	if err != nil {
-		return c.JSON(http.StatusBadRequest, map[string]string{"message": "Invalid user ID"})
+		// Mengirim respons HTTP jika ID tidak valid
+		return echo.NewHTTPError(http.StatusBadRequest, "Invalid ID")
 	}
 
-	var user entity.User
-	if err := config.DB.First(&user, id).Error; err != nil {
-		return c.JSON(http.StatusNotFound, map[string]string{"message": "User not found"})
+	// Membuat instance baru dari entitas pengguna dan mengikat data dari permintaan HTTP
+	user := new(entity.User)
+	if err := c.Bind(user); err != nil {
+		// Mengirim respons HTTP jika terjadi kesalahan dalam mengikat data pengguna
+		return echo.NewHTTPError(http.StatusBadRequest, err.Error())
 	}
 
-	if err := config.DB.Delete(&user).Error; err != nil {
-		return c.JSON(http.StatusInternalServerError, map[string]string{"message": "Failed to delete user"})
+	// Mencari pengguna yang ada dalam basis data berdasarkan ID
+	var existingUser entity.User
+	if err := config.DB.First(&existingUser, Id).Error; err != nil {
+		// Mengirim respons HTTP jika pengguna tidak ditemukan
+		return echo.NewHTTPError(http.StatusNotFound, "User not found")
 	}
 
-	return c.JSON(http.StatusOK, map[string]string{"message": "Success: user deleted"})
+	// Memperbarui data pengguna yang ada dengan data baru
+	existingUser.Username = user.Username
+	existingUser.Email = user.Email
+	existingUser.Password = user.Password
+	existingUser.Gender = user.Gender
+	existingUser.PhoneNumber = user.PhoneNumber
+	existingUser.UniversityName = user.UniversityName
+	existingUser.UniversityAddress = user.UniversityAddress
+	existingUser.Major = user.Major
+
+	// Menyimpan perubahan data pengguna ke dalam basis data
+	if err := config.DB.Save(&existingUser).Error; err != nil {
+		// Mengirim respons HTTP jika terjadi kesalahan saat menyimpan perubahan
+		return echo.NewHTTPError(http.StatusBadRequest, err.Error())
+	}
+
+	// Mengirim respons HTTP berhasil setelah pengguna diperbarui
+	return c.JSON(http.StatusOK, map[string]interface{}{
+		"message": "Success update user",
+		"user":    existingUser,
+	})
 }
-
-// GetInternshipListings digunakan untuk mendapatkan daftar lowongan magang.
-func GetInternshipListings(c echo.Context) error {
-	var listings []entity.InternshipListing
-	if err := config.DB.Find(&listings).Error; err != nil {
-		return c.JSON(http.StatusInternalServerError, map[string]string{"message": "Failed to retrieve internship listings"})
-	}
-
-	var result []map[string]interface{}
-	for _, listing := range listings {
-		listingData := map[string]interface{}{
-			"id":          listing.ID,
-			"title":       listing.Title,
-			"description": listing.Description,
-			"quota":       listing.Quota,
-		}
-		result = append(result, listingData)
-	}
-
-	return c.JSON(http.StatusOK, result)
-}
-
-// CheckIfUserFilledForm digunakan untuk memeriksa apakah pengguna sudah mengisi formulir pendaftaran magang.
-func CheckIfUserFilledForm(_ echo.Context, userID int) bool {
-	err := config.DB.Where("user_id = ?", userID).First(&entity.InternshipApplicationForm{}).Error
+// Menghapus data user berdasarkan ID
+func DeleteUser(c echo.Context) error {
+	IdStr := c.Param("id")
+	Id, err := strconv.Atoi(IdStr)
+	// Mengirim respons HTTP jika ID pengguna tidak valid
 	if err != nil {
-		// Jika data tidak ditemukan, kembalikan false
-		return false
-	}
-	// Jika data ditemukan, kembalikan true
-	return true
-}
-
-
-// HasPermission adalah fungsi bantu untuk memeriksa izin pengguna.
-func HasPermission(userRole string) bool {
-	if userRole == "User" {
-		return true
-	}
-	return false
-}
-
-func ChooseInternshipListing(c echo.Context) error {
-	userID, err := middleware.GetUserIDFromToken(c)
-	if err != nil {
-		return c.JSON(http.StatusUnauthorized, map[string]string{"message": "Token JWT tidak valid"})
+		return echo.NewHTTPError(http.StatusBadRequest, "Invalid User ID")
 	}
 
-	userIDInt, err := strconv.Atoi(userID)
-	if err != nil {
-		return c.JSON(http.StatusBadRequest, map[string]string{"message": "ID pengguna tidak valid"})
+	var User entity.User
+	// Mengirim respons HTTP jika pengguna tidak ditemukan
+	if err := config.DB.First(&User, Id).Error; err != nil {
+		return echo.NewHTTPError(http.StatusBadRequest, "User Not Found")
 	}
-
-	if !CheckIfUserFilledForm(c, userIDInt) {
-		return c.JSON(http.StatusBadRequest, map[string]string{"message": "Anda harus mengisi formulir pendaftaran terlebih dahulu"})
-	}
-
-	listingIDStr := c.Param("listing_id")
-	listingID, err := strconv.Atoi(listingIDStr)
-	if err != nil {
-		return c.JSON(http.StatusBadRequest, map[string]string{"message": "ID Pendaftaran Magang tidak valid"})
-	}
-
-	var listing entity.InternshipListing
-	if err := config.DB.First(&listing, listingID).Error; err != nil {
-		return c.JSON(http.StatusNotFound, map[string]string{"message": "Pendaftaran Magang tidak ditemukan"})
-	}
-
-	if listing.Quota <= 0 {
-		return c.JSON(http.StatusBadRequest, map[string]string{"message": "Kuota untuk pendaftaran magang ini sudah penuh"})
-	}
-
-	// Periksa izin pengguna (Anda perlu mendapatkan peran pengguna dari suatu sumber sebelumnya)
-	userRole := "User"
-	if HasPermission(userRole) {
-		if listing.Quota > 0 {
-			listing.SelectedCandidates = append(listing.SelectedCandidates, entity.SelectedCandidate{CandidateID: userIDInt})
-			listing.Quota--
-		} else {
-			return c.JSON(http.StatusBadRequest, map[string]string{"message": "Kuota untuk pendaftaran magang ini sudah penuh"})
-		}
-	} else {
-		return c.JSON(http.StatusBadRequest, map[string]string{"message": "Anda tidak memiliki izin untuk memilih pendaftaran magang"})
-	}
-
-	// Simpan perubahan dalam database
-	if err := config.DB.Save(&listing).Error; err != nil {
-		return c.JSON(http.StatusInternalServerError, map[string]string{"message": "Terjadi kesalahan saat mengurangi kuota"})
-	}
-
-	return c.JSON(http.StatusOK, map[string]string{"message": "Pemilihan pendaftaran magang berhasil"})
-}
-
-// GetApplicationStatus digunakan untuk mendapatkan status aplikasi pengguna.
-func GetApplicationStatus(c echo.Context) error {
-	userID, err := middleware.GetUserIDFromToken(c)
-	if err != nil {
-		return c.JSON(http.StatusUnauthorized, map[string]string{"message": "Invalid JWT token"})
-	}
-
-	// Parse user ID as an integer
-	userIDInt, err := strconv.Atoi(userID)
-	if err != nil {
-		return c.JSON(http.StatusBadRequest, map[string]string{"message": "Invalid user ID"})
-	}
-
-	// Query the database to get the internship listings chosen by the user
-	var selectedListings []entity.InternshipListing
-	if err := config.DB.Model(&entity.InternshipListing{}).Where("selected_candidates LIKE ?", "%"+strconv.Itoa(userIDInt)+"%").Find(&selectedListings).Error; err != nil {
-		return c.JSON(http.StatusInternalServerError, map[string]string{"message": "Failed to retrieve selected listings"})
-	}
-
-	// Prepare the response data
-	var applicationStatus []map[string]interface{}
-	for _, listing := range selectedListings {
-		listingData := map[string]interface{}{
-			"listing_id":  listing.ID,
-			"title":       listing.Title,
-			"description": listing.Description,
-			"quota":       listing.Quota,
-		}
-		applicationStatus = append(applicationStatus, listingData)
+	// Mengirim respons HTTP jika terjadi kesalahan saat menghapus pengguna
+	if err := config.DB.Delete(&User).Error; err != nil {
+		return echo.NewHTTPError(http.StatusBadRequest, err.Error())
 	}
 
 	return c.JSON(http.StatusOK, map[string]interface{}{
-		"message":           "Success: get application status",
-		"selected_listings": applicationStatus,
+		"message": "success delete user",
+		"User":    User,
 	})
 }
 
-// contains adalah fungsi bantu untuk memeriksa apakah elemen ada dalam slice.
-func contains(slice []int, item int) bool {
-	for _, v := range slice {
-		if v == item {
-			return true
-		}
-	}
-	return false
-}
+//  internship
 
-// CancelApplication digunakan untuk membatalkan aplikasi pengguna.
+// GetInternshipListings digunakan untuk mendapatkan daftar lowongan magang
+func GetInternshipListings(c echo.Context) error {
+	var internshipListings []entity.Internship_Listing
+
+	// Dapatkan semua daftar lowongan magang dari basis data
+	if err := config.DB.Find(&internshipListings).Error; err != nil {
+		return c.JSON(http.StatusInternalServerError, map[string]interface{}{
+			"message": "Gagal mengambil daftar magang",
+			"error":   err.Error(),
+		})
+	}
+
+	return c.JSON(http.StatusOK, map[string]interface{}{
+		"message":  "Daftar magang berhasil diambil",
+		"listings": internshipListings,
+	})
+}
+// ApplyForInternship ini digunakan untuk mengirimkan aplikasi pendaftaran magang
+func ApplyForInternship(c echo.Context) error {
+	// Deklarasi dan pengisian instansi ApplicationForm
+	var formData entity.Internship_ApplicationForm
+	fmt.Println("formData", formData)
+	if err := c.Bind(&formData); err != nil {
+		return c.JSON(http.StatusBadRequest, map[string]interface{}{
+			"message": "Gagal mengikuti pendaftaran magang",
+			"error":   err.Error(),
+		})
+	}
+
+	// Mencari ID penawaran magang berdasarkan judul yang dipilih
+	selectedTitle := formData.SelectedTitle
+	var selectedListingID uint
+	// Ganti "models.InternshipListing" dengan model yang sesuai dan sesuaikan cara mengambil data dari database
+	var listing entity.Internship_Listing
+	if err := config.DB.Where("title = ?", selectedTitle).First(&listing).Error; err != nil {
+		return c.JSON(http.StatusBadRequest, map[string]interface{}{
+			"message": "Penawaran magang tidak ditemukan",
+		})
+	}
+	selectedListingID = listing.ID
+
+	// Validasi data
+	invalidData := make(map[string]string)
+	if formData.Nim == "" {
+		invalidData["nim"] = "Nim is required"
+	}
+	if formData.GPA <= 0 {
+		invalidData["gpa"] = "GPA must be greater than 0"
+	}
+	if formData.EducationLevel == "" {
+		invalidData["education_level"] = "Education level is required"
+	}
+	if formData.Username == "" {
+		invalidData["username"] = "Username is required"
+	}
+	if formData.UserEmail == "" {
+		invalidData["user_email"] = "User email is required"
+	}
+
+	if len(invalidData) > 0 {
+		return c.JSON(http.StatusBadRequest, map[string]interface{}{
+			"message":     "Data formulir tidak valid",
+			"invalidData": invalidData,
+		})
+	}
+
+	// Simpan aplikasi ke dalam database
+	application := entity.Internship_ApplicationForm{
+		Model:               gorm.Model{},
+		Nim:                 formData.Nim,
+		GPA:                 formData.GPA,
+		EducationLevel:      formData.EducationLevel,
+		UserID:              formData.UserID,
+		Status:              "",
+		UserEmail:           formData.UserEmail,
+		Username:            formData.Username,
+		SelectedTitle:       selectedTitle,
+		InternshipListingID: selectedListingID,
+		// Selected_Candidates: formData.Selected_Candidates,
+	}
+	log.Println("application", application)
+
+	// Dapatkan penawaran magang berdasarkan selectedListingID
+	var internshipListing entity.Internship_Listing
+	if err := config.DB.First(&internshipListing, selectedListingID).Error; err != nil {
+		return c.JSON(http.StatusBadRequest, map[string]interface{}{
+			"message": "Penawaran magang tidak ditemukan",
+		})
+	}
+
+	if err := config.DB.Create(&application).Error; err != nil {
+		return c.JSON(http.StatusInternalServerError, map[string]interface{}{
+			"message": "Gagal memproses pendaftaran magang",
+			"error":   err.Error(),
+		})
+	}
+
+	// Kurangi kuota penawaran magang
+	if internshipListing.Quota <= 0 {
+		return c.JSON(http.StatusBadRequest, map[string]interface{}{
+			"message": "Kuota pendaftaran magang sudah penuh",
+		})
+	}
+	internshipListing.Quota--
+	if err := config.DB.Save(&internshipListing).Error; err != nil {
+		return c.JSON(http.StatusInternalServerError, map[string]interface{}{
+			"message": "Gagal memproses pendaftaran magang",
+			"error":   err.Error(),
+		})
+	}
+
+	// Membuat dan menyimpan Selected_Candidate
+	selectedCandidate := entity.Selected_Candidate{
+		Model:                       gorm.Model{
+			ID:        selectedListingID,
+			CreatedAt: time.Time{},
+			UpdatedAt: time.Time{},
+			DeletedAt: gorm.DeletedAt{},
+		},
+		InternshipApplicationFormID: application.ID,
+		InternshipApplicationForm:   application,
+	}
+
+	if err := config.DB.Create(&selectedCandidate).Error; err != nil {
+		return c.JSON(http.StatusInternalServerError, map[string]interface{}{
+			"message": "Gagal memproses pendaftaran magang",
+			"error":   err.Error(),
+		})
+	}
+
+	return c.JSON(http.StatusOK, map[string]interface{}{
+		"message": "Pendaftaran magang berhasil disimpan",
+	})
+}
+// CancelApplication digunakan untuk membatalkan formulir aplikasi berdasarkan ID.
 func CancelApplication(c echo.Context) error {
-	// Mendapatkan ID pengguna dari token JWT
-	userID, err := middleware.GetUserIDFromToken(c)
-	if err != nil {
-		return c.JSON(http.StatusUnauthorized, map[string]string{"message": "Token JWT tidak valid"})
-	}
+    // Mendapatkan ID formulir aplikasi yang ingin dibatalkan dari parameter URL
+    idParam := c.Param("id")
 
-	// Mengurai ID pengguna ke dalam bentuk integer
-	userIDInt, err := strconv.Atoi(userID)
-	if err != nil {
-		return c.JSON(http.StatusBadRequest, map[string]string{"message": "ID pengguna tidak valid"})
-	}
+    // Mengonversi ID menjadi tipe data uint
+    id, err := strconv.ParseUint(idParam, 10, 64)
+    if err != nil {
+        return c.JSON(http.StatusBadRequest, map[string]interface{}{
+            "message": "ID tidak valid",
+        })
+    }
 
-	// Mengurai ID listing dari permintaan
-	listingIDStr := c.Param("listing_id")
-	listingID, err := strconv.Atoi(listingIDStr)
-	if err != nil {
-		return c.JSON(http.StatusBadRequest, map[string]string{"message": "ID listing tidak valid"})
-	}
+    // Cari formulir aplikasi berdasarkan ID
+    var application entity.Internship_ApplicationForm
+    if err := config.DB.Where("id = ?", id).First(&application).Error; err != nil {
+        return c.JSON(http.StatusNotFound, map[string]interface{}{
+            "message": "Formulir aplikasi tidak ditemukan",
+        })
+    }
 
-	// Mengambil data listing yang dipilih dari database
-	var selectedListing entity.InternshipListing
-	if err := config.DB.Preload("SelectedCandidates").First(&selectedListing, listingID).Error; err != nil {
-		return c.JSON(http.StatusNotFound, map[string]string{"message": "Listing yang dipilih tidak ditemukan"})
-	}
+    // Periksa apakah formulir aplikasi sudah dibatalkan sebelumnya
+    if application.IsCanceled {
+        return c.JSON(http.StatusBadRequest, map[string]interface{}{
+            "message": "Formulir aplikasi sudah dibatalkan sebelumnya",
+        })
+    }
 
-	// Membuat fungsi utilitas untuk memeriksa apakah userIDInt terdapat dalam selectedListing.SelectedCandidates
-	containsUserID := func() bool {
-		for _, candidate := range selectedListing.SelectedCandidates {
-			if candidate.CandidateID == userIDInt {
-				return true
-			}
-		}
-		return false
-	}
+    // Mengubah status formulir menjadi "Dibatalkan" dan menyimpan perubahan ke database
+    application.Status = "Dibatalkan"
+    application.IsCanceled = true
+    if err := config.DB.Save(&application).Error; err != nil {
+        return c.JSON(http.StatusInternalServerError, map[string]interface{}{
+            "message": "Gagal membatalkan formulir aplikasi",
+            "error":   err.Error(),
+        })
+    }
 
-	// Memeriksa apakah ID pengguna terdapat dalam daftar kandidat yang dipilih
-	if !containsUserID() {
-		return c.JSON(http.StatusBadRequest, map[string]string{"message": "Pengguna tidak terpilih untuk listing ini"})
-	}
+    // Mengembalikan kuota penawaran magang
+    var internshipListing entity.Internship_Listing
+    if err := config.DB.First(&internshipListing, application.InternshipListingID).Error; err != nil {
+        return c.JSON(http.StatusBadRequest, map[string]interface{}{
+            "message": "Penawaran magang tidak ditemukan",
+        })
+    }
 
-	// // Memeriksa apakah ID pengguna terdapat dalam daftar kandidat yang dipilih
-	// if !contains(selectedListing.SelectedCandidates, userIDInt) {
-	// 	return c.JSON(http.StatusBadRequest, map[string]string{"message": "Pengguna tidak terpilih untuk listing ini"})
-	// }
+    internshipListing.Quota++
+    if err := config.DB.Save(&internshipListing).Error; err != nil {
+        return c.JSON(http.StatusInternalServerError, map[string]interface{}{
+            "message": "Gagal memproses pembatalan formulir aplikasi",
+            "error":   err.Error(),
+        })
+    }
 
-	// Memeriksa apakah status aplikasi sudah 'dibatalkan'
-	if selectedListing.StatusPendaftaran == "dibatalkan" {
-		return c.JSON(http.StatusBadRequest, map[string]string{"message": "Aplikasi sudah dibatalkan"})
-	}
-
-	// Mengubah status aplikasi menjadi 'dibatalkan' (Menunggu verifikasi admin)
-	selectedListing.StatusPendaftaran = "dibatalkan"
-
-	// Menyimpan perubahan pada listing ke dalam database
-	if err := config.DB.Save(&selectedListing).Error; err != nil {
-		return c.JSON(http.StatusInternalServerError, map[string]string{"message": "Gagal membatalkan aplikasi"})
-	}
-
-	return c.JSON(http.StatusOK, map[string]string{"message": "Permintaan pembatalan aplikasi berhasil. Menunggu verifikasi admin"})
+    return c.JSON(http.StatusOK, map[string]interface{}{
+        "message": "Formulir aplikasi berhasil dibatalkan",
+    })
 }
+// GetApplicationStatus digunakan untuk mendapatkan status formulir aplikasi berdasarkan ID.
+func GetApplicationStatus(c echo.Context) error {
+    // Mendapatkan ID dari parameter URL
+    idParam := c.Param("id")
+
+    // Mengonversi ID menjadi tipe data uint
+    id, err := strconv.ParseUint(idParam, 10, 64)
+    if err != nil {
+        return c.JSON(http.StatusBadRequest, map[string]interface{}{
+            "message": "ID tidak valid",
+        })
+    }
+
+    // Cari form aplikasi berdasarkan ID
+    var application entity.Internship_ApplicationForm
+    if err := config.DB.Where("id = ?", id).First(&application).Error; err != nil {
+        return c.JSON(http.StatusNotFound, map[string]interface{}{
+            "message": "Form aplikasi tidak ditemukan",
+        })
+    }
+
+    // Anda dapat mengakses status aplikasi melalui application.Status
+    return c.JSON(http.StatusOK, map[string]interface{}{
+        "message": "Status form aplikasi",
+        "status":  application.Status,
+    })
+}
+
+
+
+
+
+
+
