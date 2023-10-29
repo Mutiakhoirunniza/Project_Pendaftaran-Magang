@@ -281,6 +281,7 @@ func ViewAllCandidates(c echo.Context) error {
         return c.JSON(http.StatusInternalServerError, map[string]interface{}{"error": err.Error()})
     }
 
+	
     // Menampilkan daftar kandidat
     return c.JSON(http.StatusOK, candidates)
 }
