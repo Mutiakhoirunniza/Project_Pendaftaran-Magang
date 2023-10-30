@@ -2,6 +2,8 @@ package routes
 
 import (
 	"miniproject/controllers"
+	"miniproject/internships/handler"
+	"miniproject/internships/usecase"
 	"miniproject/middleware"
 
 	"github.com/labstack/echo/v4"
@@ -9,6 +11,10 @@ import (
 
 func InitmyRoutes() *echo.Echo {
 	e := echo.New()
+	internshipUsecase := usecase.NewInternshipApplicationUsecase()
+	internshipHandler := handler.NewInternshipHandler(internshipUsecase)
+	e.POST("/recommendation", internshipHandler.SubmitApplication)
+	
 	middleware.LogMiddleware(e)
 
 	// Rute-rute admin
@@ -21,7 +27,7 @@ func InitmyRoutes() *echo.Echo {
 	adminGroup.PUT("/internship/:id", controllers.UpdateInternshipListingByID, middleware.JWTMiddleware())
 	adminGroup.DELETE("/internship/:id", controllers.DeleteInternshipListingByID, middleware.JWTMiddleware())
 	adminGroup.GET("/selected-candidates/:id", controllers.SelectCandidatesByGPAID, middleware.JWTMiddleware())
-	adminGroup.GET("/candidates", controllers.ViewAllCandidates, middleware.JWTMiddleware())
+	adminGroup.GET("/candidates", controllers.ViewAllCandidates, middleware.JWTMiddleware()) //tambahkan ke user juga
 	adminGroup.POST("/email", controllers.SendEmailHandler, middleware.JWTMiddleware())
 
 	// Route untuk User
@@ -36,11 +42,9 @@ func InitmyRoutes() *echo.Echo {
 	userGroup.GET("/internship-listings", controllers.GetInternshipListings, middleware.JWTMiddleware())
 	userGroup.POST("/apply-for-internship", controllers.ApplyForInternship, middleware.JWTMiddleware())
 	userGroup.DELETE("/apply-for-internship", controllers.CancelApplication, middleware.JWTMiddleware())
+	userGroup.GET("/candidates", controllers.ViewAllCandidates, middleware.JWTMiddleware())
 	userGroup.GET("/Application-Status/:id", controllers.GetApplicationStatus, middleware.JWTMiddleware())
 
-	internshipsUsecase := controllers.NewInternshipsUsecase()
-	e.POST("/applyInternship", func(c echo.Context) error {
-		return controllers.ApplyInternship(c, internshipsUsecase)
-	})
+
 	return e
 }
