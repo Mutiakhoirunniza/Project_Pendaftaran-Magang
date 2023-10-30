@@ -10,6 +10,6 @@ COPY . .
 
 RUN go build -o mutia .
 
-EXPOSE 8081
+EXPOSE 8080
 
 CMD ["/app/mutia"]
