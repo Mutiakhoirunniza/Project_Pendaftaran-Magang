@@ -200,7 +200,7 @@ func DeleteUser(c echo.Context) error {
 	})
 }
 
-//  internship
+//  internship user
 
 // GetInternshipListings digunakan untuk mendapatkan daftar lowongan magang
 func GetInternshipListings(c echo.Context) error {
