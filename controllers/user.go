@@ -215,10 +215,11 @@ func GetInternshipListings(c echo.Context) error {
 	}
 
 	return c.JSON(http.StatusOK, map[string]interface{}{
-		"message":  "Daftar magang berhasil diambil",
+		"message":  "Daftar magang Terbaru", //diganti
 		"listings": internshipListings,
 	})
 }
+
 // ApplyForInternship ini digunakan untuk mengirimkan aplikasi pendaftaran magang
 func ApplyForInternship(c echo.Context) error {
 	// Deklarasi dan pengisian instansi ApplicationForm
@@ -337,6 +338,7 @@ func ApplyForInternship(c echo.Context) error {
 		"message": "Pendaftaran magang berhasil disimpan",
 	})
 }
+
 // CancelApplication digunakan untuk membatalkan formulir aplikasi berdasarkan ID.
 func CancelApplication(c echo.Context) error {
 	// Mendapatkan ID formulir aplikasi yang ingin dibatalkan dari parameter URL

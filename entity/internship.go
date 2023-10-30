@@ -16,7 +16,7 @@ type Internship_Listing struct {
 
 type Internship_ApplicationForm struct {
 	gorm.Model
-	CV                  string  `json:"cv" form:"cv"`
+	CV                  string               `json:"cv" form:"cv"`
 	Nim                 string               `json:"nim" form:"nim"`
 	GPA                 float64              `json:"gpa" form:"gpa"`
 	EducationLevel      string               `json:"education_level" form:"education_level"`
