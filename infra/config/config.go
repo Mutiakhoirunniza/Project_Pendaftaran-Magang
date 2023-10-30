@@ -81,3 +81,4 @@ func loadConfig() *AppConfig {
 	return res
 
 }
+
