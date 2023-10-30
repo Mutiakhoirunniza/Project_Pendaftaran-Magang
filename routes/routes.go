@@ -27,7 +27,7 @@ func InitmyRoutes() *echo.Echo {
 	adminGroup.PUT("/internship/:id", controllers.UpdateInternshipListingByID, middleware.JWTMiddleware())
 	adminGroup.DELETE("/internship/:id", controllers.DeleteInternshipListingByID, middleware.JWTMiddleware())
 	adminGroup.GET("/selected-candidates/:id", controllers.SelectCandidatesByGPAID, middleware.JWTMiddleware())
-	adminGroup.GET("/candidates", controllers.ViewAllCandidates, middleware.JWTMiddleware()) //tambahkan ke user juga
+	adminGroup.GET("/candidates", controllers.ViewAllCandidates, middleware.JWTMiddleware()) 
 	adminGroup.POST("/email", controllers.SendEmailHandler, middleware.JWTMiddleware())
 
 	// Route untuk User
@@ -41,7 +41,7 @@ func InitmyRoutes() *echo.Echo {
 	// internship user
 	userGroup.GET("/internship-listings", controllers.GetInternshipListings, middleware.JWTMiddleware())
 	userGroup.POST("/apply-for-internship", controllers.ApplyForInternship, middleware.JWTMiddleware())
-	userGroup.DELETE("/apply-for-internship", controllers.CancelApplication, middleware.JWTMiddleware())
+	userGroup.DELETE("/apply-for-internship/:id", controllers.CancelApplication, middleware.JWTMiddleware())
 	userGroup.GET("/candidates", controllers.ViewAllCandidates, middleware.JWTMiddleware())
 	userGroup.GET("/Application-Status/:id", controllers.GetApplicationStatus, middleware.JWTMiddleware())
 

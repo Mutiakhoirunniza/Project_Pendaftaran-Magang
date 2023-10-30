@@ -99,7 +99,7 @@ func UpdateAdminController(c echo.Context) error {
 		return echo.NewHTTPError(http.StatusNotFound, "Admin not found")
 	}
 
-	// Memperbarui data admin yang ada dengan data baru
+	// Memperbarui data admin yang ada dengan data baru dari permintaan
 	existingAdmin.Username = admin.Username
 	existingAdmin.Email = admin.Email
 	existingAdmin.Password = admin.Password
