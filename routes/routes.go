@@ -44,7 +44,5 @@ func InitmyRoutes() *echo.Echo {
 	userGroup.DELETE("/apply-for-internship/:id", controllers.CancelApplication, middleware.JWTMiddleware())
 	userGroup.GET("/candidates", controllers.ViewAllCandidates, middleware.JWTMiddleware())
 	userGroup.GET("/Application-Status/:id", controllers.GetApplicationStatus, middleware.JWTMiddleware())
-
-
 	return e
 }
