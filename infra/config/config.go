@@ -26,10 +26,10 @@ func InitConfig() *AppConfig {
 	var res = new(AppConfig)
 	res = loadConfig()
 
-	if res == nil {
-		logrus.Fatal("Config : Cannot start program, failed to load configuration")
-		return nil
-	}
+	// if res == nil {
+	// 	logrus.Fatal("Config : Cannot start program, failed to load configuration")
+	// 	return nil
+	// }
 
 	return res
 }
@@ -37,12 +37,12 @@ func InitConfig() *AppConfig {
 func loadConfig() *AppConfig {
 	var res = new(AppConfig)
 
-	err := godotenv.Load(".env")
+	godotenv.Load(".env")
 
-	if err != nil {
-		logrus.Error("Config : Cannot load config file,", err.Error())
-		return nil
-	}
+	// if err != nil {
+	// 	logrus.Error("Config : Cannot load config file,", err.Error())
+	// 	return nil
+	// }
 
 	if val, found := os.LookupEnv("SERVERPORT"); found {
 		port, err := strconv.Atoi(val)
