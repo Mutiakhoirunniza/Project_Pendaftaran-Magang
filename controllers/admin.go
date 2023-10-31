@@ -242,7 +242,7 @@ func SelectCandidatesByGPAID(c echo.Context) error {
             return c.JSON(http.StatusInternalServerError, map[string]interface{}{"error": err.Error()})
         }
 
-        // Buat entri di Selected_Candidate 
+        // Buat entri di Selected_Candidate atau menyimpan data terkait kandidat yang dipilih 
         selectedCandidate := entity.Selected_Candidate{
             InternshipApplicationFormID: candidate.ID,
             InternshipApplicationForm:   candidate,
