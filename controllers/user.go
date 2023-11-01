@@ -235,7 +235,7 @@ func ApplyForInternship(c echo.Context) error {
 	// Mencari ID penawaran magang berdasarkan judul yang dipilih
 	selectedTitle := formData.SelectedTitle
 	var selectedListingID uint
-	// Ganti "models.InternshipListing" dengan model yang sesuai dan sesuaikan cara mengambil data dari database
+	// sesuaikan cara mengambil data dari database
 	var listing entity.Internship_Listing
 	if err := config.DB.Where("title = ?", selectedTitle).First(&listing).Error; err != nil {
 		return c.JSON(http.StatusBadRequest, map[string]interface{}{
@@ -341,7 +341,7 @@ func ApplyForInternship(c echo.Context) error {
 
 // CancelApplication digunakan untuk membatalkan formulir aplikasi berdasarkan ID.
 func CancelApplication(c echo.Context) error {
-	// Mendapatkan ID formulir aplikasi yang ingin dibatalkan dari parameter URL
+	// Mendapatkan ID formulir aplikasi yang ingin dibatalkan 
 	idParam := c.Param("id")
 
 	// Mengonversi ID menjadi tipe data uint

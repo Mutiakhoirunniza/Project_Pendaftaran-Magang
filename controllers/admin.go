@@ -213,7 +213,7 @@ func DeleteInternshipListingByID(c echo.Context) error {
 }
 // Fungsi ini digunakan untuk memilih kandidat berdasarkan ID dan rentang nilai IPK (GPA)
 func SelectCandidatesByGPAID(c echo.Context) error {
-    // Mendapatkan ID dari permintaan API
+    // Mendapatkan ID 
     candidateID := c.Param("id")
 	// Tetapkan nilai minimum dan maksimum IPK yang diinginkan
     minGPA := 3.5
@@ -242,7 +242,7 @@ func SelectCandidatesByGPAID(c echo.Context) error {
             return c.JSON(http.StatusInternalServerError, map[string]interface{}{"error": err.Error()})
         }
 
-        // Buat entri di Selected_Candidate jika diperlukan
+        // Buat entri di Selected_Candidate atau menyimpan data terkait kandidat yang dipilih 
         selectedCandidate := entity.Selected_Candidate{
             InternshipApplicationFormID: candidate.ID,
             InternshipApplicationForm:   candidate,
