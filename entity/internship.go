@@ -9,6 +9,7 @@ type Internship_Listing struct {
 	Title            string                       `json:"title" form:"title"`
 	Description      string                       `json:"description" form:"description"`
 	Quota            int                          `json:"quota" form:"quota"`
+	Qualifications   string                       `json:"qualifications" form:"qualifications"`
 	StartDate        string                       `json:"start_date" form:"start_date"`
 	EndDate          string                       `json:"end_date" form:"end_date"`
 	ApplicationForms []Internship_ApplicationForm `gorm:"foreignKey:InternshipListingID" json:"applicationforms" form:"applicationforms"`
