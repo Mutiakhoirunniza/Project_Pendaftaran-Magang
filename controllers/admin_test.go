@@ -1,297 +1,279 @@
 package controllers
 
-// import (
-// 	"encoding/json"
-// 	"miniproject/entity"
-// 	"net/http"
-// 	"net/http/httptest"
-// 	"net/url"
-// 	"strings"
-// 	"testing"
+import (
+	"bytes"
+	"encoding/json"
+	"io/ioutil"
+	"miniproject/entity"
+	"miniproject/middleware"
+	"net/http"
+	"net/http/httptest"
+	"strings"
+	"testing"
 
-// 	"github.com/labstack/echo/v4"
-// 	"github.com/stretchr/testify/assert"
-// )
+	"github.com/labstack/echo/v4"
+	"github.com/stretchr/testify/assert"
+)
 
-// func TestLoginAdminController(t *testing.T) {
-// 	// Create a new Echo instance
-// 	e := echo.New()
+func TestRegisterAdmin(t *testing.T) {
+	e := echo.New()
+	req := httptest.NewRequest(http.MethodPost, "/register", nil)
+	rec := httptest.NewRecorder()
+	c := e.NewContext(req, rec)
 
-// 	// Create a mock database and set it in the Echo context
-// 	mockDB := &MockDB{
-// 		UserData: make(map[string]entity.User),
-// 	}
-// 	e.Use(func(next echo.HandlerFunc) echo.HandlerFunc {
-// 		return func(c echo.Context) error {
-// 			c.Set("db", mockDB)
-// 			return next(c)
-// 		}
-// 	})
+	// Membuat objek Admin untuk pengujian
+	admin := entity.Admin{
+		Email: "caca@gmail.com",
+	}
 
-// 	// Initialize the database or database connection here
-// 	// You need to ensure that the database or connection is properly initialized.
+	// Marshal objek Admin menjadi JSON
+	adminJSON, err := json.Marshal(admin)
+	if err != nil {
+		t.Fatal(err)
+	}
 
-// 	// Create a request and response recorder
-// 	req := httptest.NewRequest(http.MethodPost, "/login", nil)
-// 	rec := httptest.NewRecorder()
-// 	c := e.NewContext(req, rec)
+	// Menggunakan ioutil.NopCloser untuk membungkus JSON sebagai ReadCloser
+	req.Body = ioutil.NopCloser(bytes.NewReader(adminJSON))
 
-// 	// Initialize the mock database with user data
-// 	userData := entity.User{
-// 		Email:    "admin@example.com",
-// 		Password: "your_password",
-// 	}
-// 	mockDB.UserData[userData.Email] = userData
+	// Memanggil fungsi RegisterAdmin
+	err = RegisterAdmin(c)
 
-// 	// Call the LoginAdminController function
-// 	if assert.NoError(t, LoginAdminController(c)) {
-// 		assert.Equal(t, http.StatusOK, rec.Code)
+	// Memeriksa respons HTTP
+	if assert.NoError(t, err) {
+		assert.Equal(t, http.StatusOK, rec.Code)
+	}
 
-// 		// Add your assertion checks for the response here
-// 		// For example, check the response body for expected content.
-// 	}
-// }
+	// Memeriksa respons JSON
+	var response map[string]interface{}
+	err = json.Unmarshal(rec.Body.Bytes(), &response)
+	if assert.NoError(t, err) {
+		assert.Equal(t, "Success create new user", response["message"])
+	}
+}
 
-// func TestGetAdminByID(t *testing.T) {
-// 	// Membuat objek Echo untuk pengujian
-// 	e := echo.New()
-// 	req := httptest.NewRequest(http.MethodGet, "/admin/1", nil)
-// 	rec := httptest.NewRecorder()
-// 	c := e.NewContext(req, rec)
+func TestLoginAdminController(t *testing.T) {
+	e := echo.New()
+	req := httptest.NewRequest(http.MethodPost, "/login", nil)
+	rec := httptest.NewRecorder()
+	c := e.NewContext(req, rec)
 
-// 	// Memanggil fungsi GetAdminByID dengan ID yang valid
-// 	if assert.NoError(t, GetAdminByID(c)) {
-// 		// Memeriksa respons HTTP
-// 		assert.Equal(t, http.StatusOK, rec.Code)
+	// Membuat data admin palsu untuk digunakan dalam pengujian
+	fakeAdmin := entity.Admin{
+		Username: "caca",
+		Password: "caca12",
+		Email:    "caca@gmail.com",
+	}
 
-// 		// Anda juga dapat memeriksa konten JSON dalam respons
-// 		// Misalnya, jika Anda ingin memastikan bahwa respons berisi "Success" dalam pesan.
-// 		expectedJSON := `{"message":"Success","admin":{}}`
-// 		assert.JSONEq(t, expectedJSON, rec.Body.String())
-// 	}
+	// Menambahkan data palsu ke body request
+	body, _ := json.Marshal(fakeAdmin)
+	req.Body = ioutil.NopCloser(bytes.NewReader(body)) 
 
-// 	// Memanggil fungsi GetAdminByID dengan ID yang tidak valid
-// 	req = httptest.NewRequest(http.MethodGet, "/admin/invalid_id", nil)
-// 	rec = httptest.NewRecorder()
-// 	c = e.NewContext(req, rec)
+	// Memanggil fungsi LoginAdminController
+	if assert.NoError(t, LoginAdminController(c)) {
+		assert.Equal(t, http.StatusOK, rec.Code)
 
-// 	if assert.NoError(t, GetAdminByID(c)) {
-// 		// Memeriksa respons HTTP
-// 		assert.Equal(t, http.StatusBadRequest, rec.Code)
+		// Memeriksa isi respon JSON
+		expectedResponse := map[string]interface{}{
+			"message": "Success login",
+			"user": map[string]interface{}{
+				"ID":       1, 
+				"Username": "caca",
+				"Email":    "caca@gmail.com",
+				"Token":    "your_token", 
+			},
+		}
+		var response map[string]interface{}
+		err := json.Unmarshal(rec.Body.Bytes(), &response)
+		if assert.NoError(t, err) {
+			assert.Equal(t, expectedResponse, response)
+		}
+	}
+}
 
-// 		// Anda dapat memeriksa pesan dalam respons.
-// 		expectedMessage := "ID Admin tidak valid"
-// 		assert.Equal(t, expectedMessage, rec.Body.String())
-// 	}
+func TestGetAdminByID(t *testing.T) {
+	// Membuat instansi Echo dan request palsu
+	e := echo.New()
+	req := httptest.NewRequest(http.MethodGet, "/admin/1", nil)
+	rec := httptest.NewRecorder()
+	c := e.NewContext(req, rec)
 
-// 	// Memanggil fungsi GetAdminByID dengan ID yang tidak ditemukan
-// 	// Pastikan ID yang Anda berikan benar-benar tidak ada dalam database.
-// 	req = httptest.NewRequest(http.MethodGet, "/admin/999", nil)
-// 	rec = httptest.NewRecorder()
-// 	c = e.NewContext(req, rec)
+	// Menambahkan token palsu ke konteks untuk simulasi
+	fakeToken, err := middleware.CreateToken(1, "testadmin") 
+	assert.NoError(t, err)                                  
+	c.Set("user", fakeToken)
 
-// 	if assert.NoError(t, GetAdminByID(c)) {
-// 		// Memeriksa respons HTTP
-// 		assert.Equal(t, http.StatusNotFound, rec.Code)
+	// Memanggil fungsi GetAdminByID
+	if assert.NoError(t, GetAdminByID(c)) {
+		assert.Equal(t, http.StatusOK, rec.Code)
 
-// 		// Anda dapat memeriksa pesan dalam respons.
-// 		expectedMessage := "Admin tidak ditemukan"
-// 		assert.Equal(t, expectedMessage, rec.Body.String())
-// 	}
-// }
-// func TestUpdateAdminControllerInvalidID(t *testing.T) {
-// 	// Membuat objek Echo untuk pengujian
-// 	e := echo.New()
+		// Memeriksa isi respon JSON
+		var response map[string]interface{}
+		err := json.Unmarshal(rec.Body.Bytes(), &response)
+		if assert.NoError(t, err) {
+			assert.Equal(t, "Success", response["message"])
+			admin, ok := response["admin"].(map[string]interface{})
+			if assert.True(t, ok) {
+				assert.Equal(t, "admin_username", admin["Username"]) 
+				assert.Equal(t, "admin_email", admin["Email"])      
+			}
+		}
+	}
+}
 
-// 	// Membuat body request JSON yang valid untuk pengujian
-// 	requestBody := `{
-// 		"username": "new_username",
-// 		"email": "new_email@example.com",
-// 		"password": "new_password"
-// 	}`
+func TestGetAdminByIDInvalidID(t *testing.T) {
+	// Membuat instansi Echo dan request palsu dengan ID yang tidak valid
+	e := echo.New()
+	req := httptest.NewRequest(http.MethodGet, "/admin/invalid_id", nil)
+	rec := httptest.NewRecorder()
+	c := e.NewContext(req, rec)
 
-// 	// Memanggil fungsi UpdateAdminController dengan ID yang tidak valid
-// 	req := httptest.NewRequest(http.MethodPut, "/admin/invalid_id", strings.NewReader(requestBody))
-// 	req.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
-// 	rec := httptest.NewRecorder()
-// 	c := e.NewContext(req, rec)
+	// Menambahkan token palsu ke konteks untuk simulasi
+	fakeToken, err := middleware.CreateToken(1, "testadmin") 
+	assert.NoError(t, err)                                   
+	c.Set("user", fakeToken)
 
-// 	if assert.NoError(t, UpdateAdminController(c)) {
-// 		// Memeriksa respons HTTP
-// 		assert.Equal(t, http.StatusBadRequest, rec.Code)
+	// Memanggil fungsi GetAdminByID dengan ID yang tidak valid
+	if assert.NoError(t, GetAdminByID(c)) {
+		assert.Equal(t, http.StatusBadRequest, rec.Code)
 
-// 		// Parse respons JSON
-// 		var response map[string]interface{}
-// 		err := json.Unmarshal(rec.Body.Bytes(), &response)
-// 		if assert.NoError(t, err) {
-// 			// Memeriksa pesan kesalahan dalam respons JSON
-// 			assert.Equal(t, "Invalid request body", response["error"])
-// 		}
-// 	}
-// }
-// func TestCreateInternshipListing(t *testing.T) {
-// 	// Membuat objek Echo untuk pengujian
-// 	e := echo.New()
-// 	requestBody := `{
-// 		"title": "Magang 2023",
-// 		"quota": 10,
-// 		"description": "Deskripsi lowongan magang"
-// 	}`
+		// Memeriksa isi respon JSON
+		var response map[string]interface{}
+		err := json.Unmarshal(rec.Body.Bytes(), &response)
+		if assert.NoError(t, err) {
+			assert.Equal(t, "ID Admin tidak valid", response)
+		}
+	}
+}
 
-// 	req := httptest.NewRequest(http.MethodPost, "/create-listing", strings.NewReader(requestBody))
-// 	req.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
-// 	rec := httptest.NewRecorder()
-// 	c := e.NewContext(req, rec)
+func TestGetAdminByIDNotFound(t *testing.T) {
+	// Membuat instansi Echo dan request palsu dengan ID yang tidak ada dalam basis data
+	e := echo.New()
+	req := httptest.NewRequest(http.MethodGet, "/admin/999", nil)
+	rec := httptest.NewRecorder()
+	c := e.NewContext(req, rec)
 
-// 	// Memanggil fungsi CreateInternshipListing
-// 	if assert.NoError(t, CreateInternshipListing(c)) {
-// 		// Memeriksa respons HTTP
-// 		assert.Equal(t, http.StatusCreated, rec.Code)
+	// Menambahkan token palsu ke konteks untuk simulasi
+	fakeToken, err := middleware.CreateToken(1, "testadmin") 
+	assert.NoError(t, err)                                   
+	c.Set("user", fakeToken)
 
-// 		// Anda juga dapat memeriksa konten JSON dalam respons
-// 		// Misalnya, jika Anda ingin memastikan bahwa respons berisi "Lowongan magang berhasil dibuat" dalam pesan.
-// 		expectedJSON := `{"message":"Lowongan magang berhasil dibuat","listing":{}}`
-// 		assert.JSONEq(t, expectedJSON, rec.Body.String())
-// 	}
+	// Memanggil fungsi GetAdminByID dengan ID yang tidak ditemukan
+	if assert.NoError(t, GetAdminByID(c)) {
+		assert.Equal(t, http.StatusNotFound, rec.Code)
 
-// 	// Memanggil fungsi CreateInternshipListing dengan kuota yang tidak valid
-// 	requestBody = `{
-// 		"title": "Magang 2023",
-// 		"quota": -1, // Kuota tidak valid
-// 		"description": "Deskripsi lowongan magang"
-// 	}`
+		// Memeriksa isi respon JSON
+		var response map[string]interface{}
+		err := json.Unmarshal(rec.Body.Bytes(), &response)
+		if assert.NoError(t, err) {
+			assert.Equal(t, "Admin tidak ditemukan", response)
+		}
+	}
+}
 
-// 	req = httptest.NewRequest(http.MethodPost, "/create-listing", strings.NewReader(requestBody))
-// 	req.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
-// 	rec = httptest.NewRecorder()
-// 	c = e.NewContext(req, rec)
+func TestUpdateAdminController(t *testing.T) {
+	e := echo.New()
 
-// 	if assert.NoError(t, CreateInternshipListing(c)) {
-// 		// Memeriksa respons HTTP
-// 		assert.Equal(t, http.StatusBadRequest, rec.Code)
+	// Membuat permintaan HTTP palsu untuk tes
+	reqBody := `{"Username":"cacar", "Email":"cacar@gmail.com", "Password":"cacar12"}`
+	req := httptest.NewRequest(http.MethodPut, "/admins/1", strings.NewReader(reqBody))
+	req.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
+	rec := httptest.NewRecorder()
+	c := e.NewContext(req, rec)
 
-// 		// Anda dapat memeriksa pesan dalam respons.
-// 		expectedMessage := "Kuota harus lebih dari 0"
-// 		assert.Equal(t, expectedMessage, rec.Body.String())
-// 	}
-// }
-// func TestUpdateInternshipListingByIDInvalidID(t *testing.T) {
-// 	// Membuat objek Echo untuk pengujian
-// 	e := echo.New()
+	// Memanggil fungsi UpdateAdminController
+	if err := UpdateAdminController(c); err != nil {
+		t.Fatalf("Expected no error, but got: %v", err)
+	}
 
-// 	// Membuat body request JSON yang valid untuk pengujian
-// 	requestBody := `{
-//         "title": "Magang 2023 (Diperbarui)",
-//         "quota": 15,
-//         "description": "Deskripsi lowongan magang (Diperbarui)"
-//     }`
+	// Memeriksa respons HTTP
+	if rec.Code != http.StatusOK {
+		t.Fatalf("Expected status code %d, but got: %d", http.StatusOK, rec.Code)
+	}
 
-// 	// Memanggil fungsi UpdateInternshipListingByID dengan ID yang tidak valid
-// 	req := httptest.NewRequest(http.MethodPut, "/update-listing/invalid_id", strings.NewReader(requestBody))
-// 	req.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
-// 	rec := httptest.NewRecorder()
-// 	c := e.NewContext(req, rec)
+	// Anda juga dapat memeriksa respons JSON yang dihasilkan
+	expectedResponse := `{"message": "success update admin"`
+	if !strings.Contains(rec.Body.String(), expectedResponse) {
+		t.Fatalf("Expected response to contain: %s", expectedResponse)
+	}
+}
 
-// 	if assert.NoError(t, UpdateInternshipListingByID(c)) {
-// 		// Memeriksa respons HTTP
-// 		assert.Equal(t, http.StatusBadRequest, rec.Code)
+func TestUpdateAdminControllerInvalidID(t *testing.T) {
+	e := echo.New()
 
-// 		// Parse respons JSON
-// 		var response map[string]interface{}
-// 		err := json.Unmarshal(rec.Body.Bytes(), &response)
-// 		if assert.NoError(t, err) {
-// 			// Memeriksa pesan kesalahan dalam respons JSON
-// 			assert.Equal(t, "Failed to parse request body", response["error"])
-// 		}
-// 	}
-// }
+	// Membuat permintaan HTTP palsu dengan ID yang tidak valid
+	reqBody := `{"Username":"newUsername", "Email":"newEmail", "Password":"newPassword"}`
+	req := httptest.NewRequest(http.MethodPut, "/admins/invalidID", strings.NewReader(reqBody))
+	req.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
+	rec := httptest.NewRecorder()
+	c := e.NewContext(req, rec)
 
-// func TestDeleteInternshipListingByID(t *testing.T) {
-// 	// Membuat objek Echo untuk pengujian
-// 	e := echo.New()
+	// Memanggil fungsi UpdateAdminController
+	if err := UpdateAdminController(c); err == nil {
+		t.Fatalf("Expected an error, but got none")
+	}
 
-// 	req := httptest.NewRequest(http.MethodDelete, "/delete-listing/1", nil)
-// 	rec := httptest.NewRecorder()
-// 	c := e.NewContext(req, rec)
+	// Memeriksa status code 400 Bad Request
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("Expected status code %d, but got: %d", http.StatusBadRequest, rec.Code)
+	}
+}
 
-// 	// Memanggil fungsi DeleteInternshipListingByID dengan ID yang valid
-// 	if assert.NoError(t, DeleteInternshipListingByID(c)) {
-// 		// Memeriksa respons HTTP
-// 		assert.Equal(t, http.StatusOK, rec.Code)
-// 		expectedJSON := `{"message":"Pendaftaran magang berhasil dihapus"}`
-// 		assert.JSONEq(t, expectedJSON, rec.Body.String())
-// 	}
 
-// 	// Memanggil fungsi DeleteInternshipListingByID dengan ID yang tidak valid
-// 	req = httptest.NewRequest(http.MethodDelete, "/delete-listing/invalid_id", nil)
-// 	rec = httptest.NewRecorder()
-// 	c = e.NewContext(req, rec)
+func TestCreateInternshipListing(t *testing.T) {
+	e := echo.New()
+	req := httptest.NewRequest(http.MethodPost, "/create-internship", nil)
+	rec := httptest.NewRecorder()
+	e.NewContext(req, rec)
 
-// 	if assert.NoError(t, DeleteInternshipListingByID(c)) {
-// 		// Memeriksa respons HTTP
-// 		assert.Equal(t, http.StatusInternalServerError, rec.Code)
+	// Test case 1: Successful Creation
+	requestBody1 := map[string]interface{}{
+		"Quota": 10,
+	}
+	reqBody1, _ := json.Marshal(requestBody1)
+	req1 := httptest.NewRequest(http.MethodPost, "/create-internship", bytes.NewReader(reqBody1))
+	req1.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
+	rec1 := httptest.NewRecorder()
+	c1 := e.NewContext(req1, rec1)
+	CreateInternshipListing(c1)
+	assert.Equal(t, http.StatusCreated, rec1.Code)
 
-// 		// Anda dapat memeriksa pesan dalam respons.
-// 		expectedMessage := "Gagal menghapus pendaftaran magang"
-// 		assert.Equal(t, expectedMessage, rec.Body.String())
-// 	}
-// }
-// func TestSelectCandidatesByGPAID(t *testing.T) {
-// 	// Membuat objek Echo untuk pengujian
-// 	e := echo.New()
-// 	req := httptest.NewRequest(http.MethodPost, "/select-candidates/1", nil) // Ganti URL dengan yang sesuai
-// 	rec := httptest.NewRecorder()
-// 	c := e.NewContext(req, rec)
+	// Test case 2: Unauthorized
+	req2 := httptest.NewRequest(http.MethodPost, "/create-internship", nil)
+	rec2 := httptest.NewRecorder()
+	c2 := e.NewContext(req2, rec2)
+	CreateInternshipListing(c2)
+	assert.Equal(t, http.StatusUnauthorized, rec2.Code)
 
-// 	// Memanggil fungsi SelectCandidatesByGPAID
-// 	if assert.NoError(t, SelectCandidatesByGPAID(c)) {
-// 		// Memeriksa respons HTTP
-// 		assert.Equal(t, http.StatusOK, rec.Code)
+	// Test case 3: Bad Request
+	requestBody3 := map[string]interface{}{
+		"Quota": -1,
+	}
+	reqBody3, _ := json.Marshal(requestBody3)
+	req3 := httptest.NewRequest(http.MethodPost, "/create-internship", bytes.NewReader(reqBody3))
+	req3.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
+	rec3 := httptest.NewRecorder()
+	c3 := e.NewContext(req3, rec3)
+	CreateInternshipListing(c3)
+	assert.Equal(t, http.StatusBadRequest, rec3.Code)
+}
 
-// 		// Anda juga dapat memeriksa konten JSON dalam respons
-// 		// Misalnya, jika Anda ingin memastikan bahwa respons berisi "Candidates selected based on GPA range" dalam pesan.
-// 		expectedJSON := `{"message":"Candidates selected based on GPA range"}`
-// 		assert.JSONEq(t, expectedJSON, rec.Body.String())
-// 	}
-// }
-// func TestSendEmailHandler(t *testing.T) {
-// 	// Membuat objek Echo untuk pengujian
-// 	e := echo.New()
 
-// 	// Membuat form request dengan parameter yang sesuai
-// 	form := url.Values{}
-// 	form.Set("userEmail", "user@example.com")
-// 	form.Set("username", "TestUser")
-// 	form.Set("status", "accepted") // Pastikan status sesuai dengan yang diharapkan
+func TestUpdateInternshipListingByID(t *testing.T) {
+	// Inisialisasi Echo framework
+	e := echo.New()
+	req := httptest.NewRequest(http.MethodPut, "/admin/InternshipListing/:id", strings.NewReader(`{"field1": "value1", "field2": "value2"}`)) 
+	req.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
+	rec := httptest.NewRecorder()
+	c := e.NewContext(req, rec)
 
-// 	req := httptest.NewRequest(http.MethodPost, "/send-email", strings.NewReader(form.Encode()))
-// 	req.Header.Set(echo.HeaderContentType, echo.MIMEApplicationForm)
-// 	rec := httptest.NewRecorder()
-// 	c := e.NewContext(req, rec)
+	// Simulasikan token dan data Admin yang valid
+	token := "your-valid-token"
+	username := "caca"
+	c.Set("user", map[string]interface{}{"token": token, "username": username})
+	err := UpdateInternshipListingByID(c)
 
-// 	// Memanggil fungsi SendEmailHandler
-// 	if assert.NoError(t, SendEmailHandler(c)) {
-// 		// Memeriksa respons HTTP
-// 		assert.Equal(t, http.StatusOK, rec.Code)
-
-// 		// Anda juga dapat memeriksa konten JSON dalam respons
-// 		// Misalnya, jika Anda ingin memastikan bahwa respons berisi "Email sent successfully" dalam pesan.
-// 		expectedJSON := `{"message":"Email sent successfully"}`
-// 		assert.JSONEq(t, expectedJSON, rec.Body.String())
-// 	}
-// }
-// func TestViewAllCandidates(t *testing.T) {
-// 	// Membuat objek Echo untuk menguji handler
-// 	e := echo.New()
-
-// 	// Membuat HTTP request palsu dengan metode GET ke endpoint "/candidates"
-// 	req := httptest.NewRequest(http.MethodGet, "/candidates", nil)
-// 	rec := httptest.NewRecorder()
-// 	c := e.NewContext(req, rec)
-
-// 	// Memanggil fungsi ViewAllCandidates dengan konteks palsu
-// 	if assert.NoError(t, ViewAllCandidates(c)) {
-// 		// Memeriksa kode status HTTP yang diharapkan
-// 		assert.Equal(t, http.StatusOK, rec.Code)
-// 	}
-// }
+	// Lakukan pengujian
+	if assert.NoError(t, err) {
+		assert.Equal(t, http.StatusOK, rec.Code)
+	}
+}
