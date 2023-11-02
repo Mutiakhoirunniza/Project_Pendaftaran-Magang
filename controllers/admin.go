@@ -9,13 +9,48 @@ import (
 	"miniproject/middleware"
 	"net/http"
 	"strconv"
-	
 
 	"github.com/labstack/echo/v4"
 )
 
-
 // pengguna akun
+
+func RegisterAdmin(c echo.Context) error {
+	admin := entity.Admin{}
+	if err := c.Bind(&admin); err != nil {
+		return c.JSON(http.StatusBadRequest, map[string]interface{}{
+			"message": "Invalid admin data",
+			"error":   err.Error(),
+		})
+	}
+
+	// Cek apakah pengguna sudah terdaftar berdasarkan alamat email
+	var existingUser entity.Admin
+	err := config.DB.Where("email = ?", admin.Email).First(&existingUser).Error
+	if err == nil {
+		return c.JSON(http.StatusBadRequest, map[string]interface{}{
+			"message": constants.ErrUserAlreadyExists,
+		})
+	}
+
+	// Atur peran pengguna menjadi 'user' (jika tidak sudah diset)
+	admin.Role = "admin"
+
+	// Jika pengguna belum terdaftar, simpan data pendaftaran ke dalam basis data
+	err = config.DB.Create(&admin).Error
+	if err != nil {
+		return c.JSON(http.StatusInternalServerError, map[string]interface{}{
+			"message": constants.ErrFailedToRegister,
+			"error":   err.Error(),
+		})
+	}
+
+	// Mengirim respons HTTP berhasil setelah pengguna berhasil didaftarkan
+	return c.JSON(http.StatusOK, map[string]interface{}{
+		"message": "Success create new user",
+		"user":    admin,
+	})
+}
 
 // Fungsi LoginAdminController digunakan untuk mengautentikasi admin dan memberikan token akses jika berhasil.
 func LoginAdminController(c echo.Context) error {
@@ -28,31 +63,28 @@ func LoginAdminController(c echo.Context) error {
 	}
 
 	// Mencari admin dalam basis data berdasarkan alamat email dan kata sandi
-	err := config.DB.Where("email = ? AND password = ?", admin.Email, admin.Password).First(&admin).Error
+	err := config.DB.Where("Username = ? AND password = ?", admin.Username, admin.Password).First(&admin).Error
 	if err != nil {
 		return c.JSON(http.StatusUnauthorized, map[string]interface{}{
-			"message": "Failed to log in",
+			"message": constants.ErrFailedToLogIn,
 			"error":   err.Error(),
 		})
 	}
 
 	// Menghasilkan token akses untuk admin
-	username := "admin"
-	role := "admin"
-	token, err := middleware.CreateToken(username, role)
+	token, err := middleware.CreateToken(admin.ID, admin.Username)
 	if err != nil {
 		return c.JSON(http.StatusInternalServerError, map[string]interface{}{
-			"message": "Gagal membuat token",
+			"message": constants.ErrTokenCreationFailed,
 			"error":   err.Error(),
 		})
 	}
-	c.Set("admin", token) // Menyimpan token dalam konteks
 
 	AdminResponse := entity.AdminResponse{
-		ID:    admin.ID,
-		Name:  admin.Username,
-		Email: admin.Email,
-		Token: token,
+		ID:       admin.ID,
+		Username: admin.Username,
+		Email:    admin.Email,
+		Token:    token,
 	}
 
 	return c.JSON(http.StatusOK, map[string]interface{}{
@@ -60,8 +92,19 @@ func LoginAdminController(c echo.Context) error {
 		"user":    AdminResponse,
 	})
 }
+
 // Fungsi GetAdminByID digunakan untuk mengambil data admin berdasarkan ID.
 func GetAdminByID(c echo.Context) error {
+	AdminID, Username := middleware.ExtractToken(c)
+	Admin := entity.Admin{}
+	err := config.DB.Where("Username = ? AND ID = ?", Username, AdminID).First(&Admin).Error
+	if err != nil {
+		return c.JSON(http.StatusUnauthorized, map[string]interface{}{
+			"message": constants.ErrFailedToLogIn,
+			"error":   err.Error(),
+		})
+	}
+
 	ID, err := strconv.Atoi(c.Param("id"))
 	if err != nil {
 		return c.JSON(http.StatusBadRequest, "ID Admin tidak valid")
@@ -79,8 +122,19 @@ func GetAdminByID(c echo.Context) error {
 		"admin":   admin,
 	})
 }
+
 // Fungsi UpdateAdminController digunakan untuk mengupdate data admin berdasarkan ID.
 func UpdateAdminController(c echo.Context) error {
+	AdminID, Username := middleware.ExtractToken(c)
+	Admin := entity.Admin{}
+	err := config.DB.Where("Username = ? AND ID = ?", Username, AdminID).First(&Admin).Error
+	if err != nil {
+		return c.JSON(http.StatusUnauthorized, map[string]interface{}{
+			"message": constants.ErrFailedToLogIn,
+			"error":   err.Error(),
+		})
+	}
+
 	IdStr := c.Param("id")
 	Id, err := strconv.Atoi(IdStr)
 	if err != nil {
@@ -116,11 +170,20 @@ func UpdateAdminController(c echo.Context) error {
 	})
 }
 
-
 // semua data internships admin
 
 // Membuat lowongan magang baru
 func CreateInternshipListing(c echo.Context) error {
+	AdminID, Username := middleware.ExtractToken(c)
+	Admin := entity.Admin{}
+	err := config.DB.Where("Username = ? AND ID = ?", Username, AdminID).First(&Admin).Error
+	if err != nil {
+		return c.JSON(http.StatusUnauthorized, map[string]interface{}{
+			"message": constants.ErrFailedToLogIn,
+			"error":   err.Error(),
+		})
+	}
+
 	// Bind data lowongan dari request body
 	listing := entity.Internship_Listing{}
 	if err := c.Bind(&listing); err != nil {
@@ -160,8 +223,19 @@ func CreateInternshipListing(c echo.Context) error {
 		"listing": listing,
 	})
 }
+
 // Memperbarui lowongan magang berdasarkan ID
 func UpdateInternshipListingByID(c echo.Context) error {
+	AdminID, Username := middleware.ExtractToken(c)
+	Admin := entity.Admin{}
+	err := config.DB.Where("Username = ? AND ID = ?", Username, AdminID).First(&Admin).Error
+	if err != nil {
+		return c.JSON(http.StatusUnauthorized, map[string]interface{}{
+			"message": constants.ErrFailedToLogIn,
+			"error":   err.Error(),
+		})
+	}
+
 	id := c.Param("id")
 
 	// Bind data lowongan dari request body
@@ -196,8 +270,19 @@ func UpdateInternshipListingByID(c echo.Context) error {
 		"listing": updatedListing,
 	})
 }
+
 // Menghapus lowongan magang berdasarkan ID
 func DeleteInternshipListingByID(c echo.Context) error {
+	AdminID, Username := middleware.ExtractToken(c)
+	Admin := entity.Admin{}
+	err := config.DB.Where("Username = ? AND ID = ?", Username, AdminID).First(&Admin).Error
+	if err != nil {
+		return c.JSON(http.StatusUnauthorized, map[string]interface{}{
+			"message": constants.ErrFailedToLogIn,
+			"error":   err.Error(),
+		})
+	}
+
 	id := c.Param("id")
 
 	if err := config.DB.Where("id = ?", id).Delete(&entity.Internship_Listing{}).Error; err != nil {
@@ -211,84 +296,86 @@ func DeleteInternshipListingByID(c echo.Context) error {
 		"message": "Pendaftaran magang berhasil dihapus",
 	})
 }
+
 // Fungsi ini digunakan untuk memilih kandidat berdasarkan ID dan rentang nilai IPK (GPA)
 func SelectCandidatesByGPAID(c echo.Context) error {
-    // Mendapatkan ID 
-    candidateID := c.Param("id")
+	AdminID, Username := middleware.ExtractToken(c)
+	Admin := entity.Admin{}
+	err := config.DB.Where("Username = ? AND ID = ?", Username, AdminID).First(&Admin).Error
+	if err != nil {
+		return c.JSON(http.StatusUnauthorized, map[string]interface{}{
+			"message": constants.ErrFailedToLogIn,
+			"error":   err.Error(),
+		})
+	}
+	candidateID := c.Param("id")
 	// Tetapkan nilai minimum dan maksimum IPK yang diinginkan
-    minGPA := 3.5
-    maxGPA := 4.0
+	minGPA := 3.5
+	maxGPA := 4.0
 
-    // Menggunakan GORM untuk mengambil kandidat yang memenuhi syarat dalam rentang IPK
-    var candidates []entity.Internship_ApplicationForm
-    if err := config.DB.Where("ID = ? AND GPA >= ? AND GPA <= ?", candidateID, minGPA, maxGPA).First(&candidates).Error; err != nil {
-        return c.JSON(http.StatusInternalServerError, map[string]interface{}{"error": err.Error()})
-    }
+	// Menggunakan GORM untuk mengambil kandidat yang sesuai dengan ID
+	var candidate entity.Internship_ApplicationForm
+	if err := config.DB.Where("ID = ?", candidateID).First(&candidate).Error; err != nil {
+		return c.JSON(http.StatusInternalServerError, map[string]interface{}{"error": err.Error()})
+	}
 
-    // Loop melalui kandidat dan periksa nilai GPA serta status pembatalan
-    for _, candidate := range candidates {
-        if candidate.IsCanceled {
-            // Jika formulir dibatalkan, ubah status menjadi "canceled"
-            candidate.Status = constants.StatusCanceled
-        } else if candidate.GPA >= minGPA && candidate.GPA <= maxGPA {
-            // Jika memenuhi syarat dalam rentang IPK, ubah status menjadi "accepted"
-            candidate.Status = constants.StatusAccepted
-        } else {
-            // Jika tidak memenuhi syarat dan tidak dibatalkan, ubah status menjadi "rejected"
-            candidate.Status = constants.StatusRejected
-        }
+	// Tetapkan status sesuai dengan kriteria yang telah Anda tetapkan
+	if candidate.IsCanceled {
+		candidate.Status = constants.StatusCanceled
+	} else if candidate.GPA < minGPA {
+		candidate.Status = constants.StatusRejected
+	} else if candidate.GPA >= minGPA && candidate.GPA <= maxGPA {
+		candidate.Status = constants.StatusAccepted
+	} else {
+		// Jika tidak memenuhi syarat, tetapkan status "Reject"
+		candidate.Status = constants.StatusRejected
+	}
 
-        if err := config.DB.Save(&candidate).Error; err != nil {
-            return c.JSON(http.StatusInternalServerError, map[string]interface{}{"error": err.Error()})
-        }
+	if err := config.DB.Save(&candidate).Error; err != nil {
+		return c.JSON(http.StatusInternalServerError, map[string]interface{}{"error": err.Error()})
+	}
 
-        // Buat entri di Selected_Candidate atau menyimpan data terkait kandidat yang dipilih 
-        selectedCandidate := entity.Selected_Candidate{
-            InternshipApplicationFormID: candidate.ID,
-            InternshipApplicationForm:   candidate,
-        }
-        if err := config.DB.Create(&selectedCandidate).Error; err != nil {
-            return c.JSON(http.StatusInternalServerError, map[string]interface{}{"error": err.Error()})
-        }
-    }
-
-    return c.JSON(http.StatusOK, map[string]interface{}{"message": "Candidates selected based on GPA range"})
+	return c.JSON(http.StatusOK, map[string]interface{}{"message": "Candidate selected based on GPA range"})
 }
+
 // Fungsi ini digunakan untuk mengirim email kepada kandidat yang diterima (status "accepted").
 func SendEmailHandler(c echo.Context) error {
-    userEmail := c.FormValue("userEmail")
-    username := c.FormValue("username")
-    status := c.FormValue("status")
+	AdminID, Username := middleware.ExtractToken(c)
+	Admin := entity.Admin{}
+	err := config.DB.Where("Username = ? AND ID = ?", Username, AdminID).First(&Admin).Error
+	if err != nil {
+		return c.JSON(http.StatusUnauthorized, map[string]interface{}{
+			"message": constants.ErrFailedToLogIn,
+			"error":   err.Error(),
+		})
+	}
 
-    // Hanya kirim email jika status adalah "accepted" (dalam kasus Anda, "StatusAccepted")
-    if status != constants.StatusAccepted {
-        return c.JSON(http.StatusBadRequest, map[string]string{"error": "Email can only be sent for accepted candidates"})
-    }
+	userEmail := c.FormValue("userEmail")
+	username := c.FormValue("username")
+	status := c.FormValue("status")
 
-    err := helpers.SendEmailToUser(userEmail, username, status)
-    if err != nil {
-        return c.JSON(http.StatusInternalServerError, map[string]string{"error": "Failed to send email", "details": err.Error()})
-    }
+	// Hanya kirim email jika status adalah "accepted" (dalam kasus Anda, "StatusAccepted")
+	if status != constants.StatusAccepted {
+		return c.JSON(http.StatusBadRequest, map[string]string{"error": "Email can only be sent for accepted candidates"})
+	}
 
-    // Kirim respons sukses jika email terkirim
-    return c.JSON(http.StatusOK, map[string]string{"message": "Email sent successfully"})
+	err = helpers.SendEmailToUser(userEmail, username, status)
+	if err != nil {
+		return c.JSON(http.StatusInternalServerError, map[string]string{"error": "Failed to send email", "details": err.Error()})
+	}
+
+	// Kirim respons sukses jika email terkirim
+	return c.JSON(http.StatusOK, map[string]string{"message": "Email sent successfully"})
 }
+
 // Fungsi ini digunakan untuk menampilkan semua kandidat yang ada di database.
 func ViewAllCandidates(c echo.Context) error {
-    // Mengambil semua kandidat dari database
-    var candidates []entity.Internship_ApplicationForm
-    if err := config.DB.Find(&candidates).Error; err != nil {
-        return c.JSON(http.StatusInternalServerError, map[string]interface{}{"error": err.Error()})
-    }
+	// Mengambil semua kandidat dari database
+	var candidates []entity.Internship_ApplicationForm
+	if err := config.DB.Find(&candidates).Error; err != nil {
+		return c.JSON(http.StatusInternalServerError, map[string]interface{}{"error": err.Error()})
+	}
 
-
-    // Menampilkan daftar kandidat
-    return c.JSON(http.StatusOK, candidates)
+	// Menampilkan daftar kandidat
+	return c.JSON(http.StatusOK, candidates)
 }
-
-
-
-
-
-
-

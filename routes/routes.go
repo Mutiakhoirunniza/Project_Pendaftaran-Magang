@@ -19,6 +19,7 @@ func InitmyRoutes() *echo.Echo {
 
 	// Rute-rute admin
 	adminGroup := e.Group("/admin")
+	adminGroup.POST("/register", controllers.RegisterAdmin)
 	adminGroup.POST("/login", controllers.LoginAdminController)
 	adminGroup.GET("/:id", controllers.GetAdminByID, middleware.JWTMiddleware())
 	adminGroup.PUT("/:id", controllers.UpdateAdminController, middleware.JWTMiddleware())

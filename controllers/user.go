@@ -36,6 +36,9 @@ func RegisterUser(c echo.Context) error {
 		})
 	}
 
+	// Atur peran pengguna menjadi 'user' (jika tidak sudah diset)
+	user.Role = "user"
+
 	// Jika pengguna belum terdaftar, simpan data pendaftaran ke dalam basis data
 	err = config.DB.Create(&user).Error
 	if err != nil {
@@ -64,7 +67,7 @@ func LoginUserController(c echo.Context) error {
 	}
 
 	// Mencari pengguna dalam basis data berdasarkan email dan kata sandi
-	err := config.DB.Where("email = ? AND password = ?", user.Email, user.Password).First(&user).Error
+	err := config.DB.Where("Username = ? AND password = ?", user.Username, user.Password).First(&user).Error
 	if err != nil {
 		return c.JSON(http.StatusUnauthorized, map[string]interface{}{
 			"message": constants.ErrFailedToLogIn,
@@ -72,20 +75,17 @@ func LoginUserController(c echo.Context) error {
 		})
 	}
 
-	// Menghasilkan token akses untuk pengguna
-	username := "user"
-	role := "user"
-	token, err := middleware.CreateToken(username, role)
+	token, err := middleware.CreateToken(user.ID, user.Username)
 	if err != nil {
 		return c.JSON(http.StatusInternalServerError, map[string]interface{}{
 			"message": constants.ErrTokenCreationFailed,
 			"error":   err.Error(),
 		})
 	}
-	c.Set("user", token)
+
 	UserResponse := entity.UserResponse{
 		ID:    user.ID,
-		Name:  user.Username,
+		Username: user.Username,
 		Email: user.Email,
 		Token: token,
 	}
@@ -98,11 +98,20 @@ func LoginUserController(c echo.Context) error {
 
 // GetAllUsers digunakan untuk mendapatkan semua data pengguna.
 func GetAllUsers(c echo.Context) error {
+	UserID, Username := middleware.ExtractToken(c)
+	user := entity.User{}
+	err := config.DB.Where("Username = ? AND ID = ?", Username, UserID).First(&user).Error
+	if err != nil {
+		return c.JSON(http.StatusUnauthorized, map[string]interface{}{
+			"message": constants.ErrFailedToLogIn,
+			"error":   err.Error(),
+		})
+	}
+
 	var users []entity.User
 	if err := config.DB.Find(&users).Error; err != nil {
 		return c.JSON(http.StatusInternalServerError, map[string]string{"message": "Failed to retrieve users"})
 	}
-
 	return c.JSON(http.StatusOK, map[string]interface{}{
 		"message": "Success: get all users",
 		"users":   users,
@@ -111,6 +120,16 @@ func GetAllUsers(c echo.Context) error {
 
 // GetUserByID digunakan untuk mendapatkan data pengguna berdasarkan ID.
 func GetUserByID(c echo.Context) error {
+	UserID, Username := middleware.ExtractToken(c)
+	User := entity.User{}
+	err := config.DB.Where("Username = ? AND ID = ?", Username, UserID).First(&User).Error
+	if err != nil {
+		return c.JSON(http.StatusUnauthorized, map[string]interface{}{
+			"message": constants.ErrFailedToLogIn,
+			"error":   err.Error(),
+		})
+	}
+
 	idStr := c.Param("id")
 	id, err := strconv.Atoi(idStr)
 	if err != nil {
@@ -130,6 +149,16 @@ func GetUserByID(c echo.Context) error {
 
 // Fungsi UpdateUserByID digunakan untuk memperbarui data pengguna berdasarkan ID.
 func UpdateUserByID(c echo.Context) error {
+	UserID, Username := middleware.ExtractToken(c)
+	User := entity.User{}
+	err := config.DB.Where("Username = ? AND ID = ?", Username, UserID).First(&User).Error
+	if err != nil {
+		return c.JSON(http.StatusUnauthorized, map[string]interface{}{
+			"message": constants.ErrFailedToLogIn,
+			"error":   err.Error(),
+		})
+	}
+
 	// Mendapatkan ID pengguna dari parameter rute
 	IdStr := c.Param("id")
 	Id, err := strconv.Atoi(IdStr)
@@ -177,6 +206,16 @@ func UpdateUserByID(c echo.Context) error {
 
 // Menghapus data user berdasarkan ID
 func DeleteUser(c echo.Context) error {
+	UserID, Username := middleware.ExtractToken(c)
+	user := entity.User{}
+	err := config.DB.Where("Username = ? AND ID = ?", Username, UserID).First(&user).Error
+	if err != nil {
+		return c.JSON(http.StatusUnauthorized, map[string]interface{}{
+			"message": constants.ErrFailedToLogIn,
+			"error":   err.Error(),
+		})
+	}
+
 	IdStr := c.Param("id")
 	Id, err := strconv.Atoi(IdStr)
 	// Mengirim respons HTTP jika ID pengguna tidak valid
@@ -204,6 +243,16 @@ func DeleteUser(c echo.Context) error {
 
 // GetInternshipListings digunakan untuk mendapatkan daftar lowongan magang
 func GetInternshipListings(c echo.Context) error {
+	UserID, Username := middleware.ExtractToken(c)
+	User := entity.User{}
+	err := config.DB.Where("Username = ? AND ID = ?", Username, UserID).First(&User).Error
+	if err != nil {
+		return c.JSON(http.StatusUnauthorized, map[string]interface{}{
+			"message": constants.ErrFailedToLogIn,
+			"error":   err.Error(),
+		})
+	}
+
 	var internshipListings []entity.Internship_Listing
 
 	// Dapatkan semua daftar lowongan magang dari basis data
@@ -222,6 +271,16 @@ func GetInternshipListings(c echo.Context) error {
 
 // ApplyForInternship ini digunakan untuk mengirimkan aplikasi pendaftaran magang
 func ApplyForInternship(c echo.Context) error {
+	UserID, Username := middleware.ExtractToken(c)
+	User := entity.User{}
+	err := config.DB.Where("Username = ? AND ID = ?", Username, UserID).First(&User).Error
+	if err != nil {
+		return c.JSON(http.StatusUnauthorized, map[string]interface{}{
+			"message": constants.ErrFailedToLogIn,
+			"error":   err.Error(),
+		})
+	}
+
 	// Deklarasi dan pengisian instansi ApplicationForm
 	var formData entity.Internship_ApplicationForm
 	fmt.Println("formData", formData)
@@ -341,7 +400,17 @@ func ApplyForInternship(c echo.Context) error {
 
 // CancelApplication digunakan untuk membatalkan formulir aplikasi berdasarkan ID.
 func CancelApplication(c echo.Context) error {
-	// Mendapatkan ID formulir aplikasi yang ingin dibatalkan 
+	UserID, Username := middleware.ExtractToken(c)
+	User := entity.User{}
+	err := config.DB.Where("Username = ? AND ID = ?", Username, UserID).First(&User).Error
+	if err != nil {
+		return c.JSON(http.StatusUnauthorized, map[string]interface{}{
+			"message": constants.ErrFailedToLogIn,
+			"error":   err.Error(),
+		})
+	}
+
+	// Mendapatkan ID formulir aplikasi yang ingin dibatalkan
 	idParam := c.Param("id")
 
 	// Mengonversi ID menjadi tipe data uint
@@ -400,6 +469,16 @@ func CancelApplication(c echo.Context) error {
 
 // GetApplicationStatus digunakan untuk mendapatkan status formulir aplikasi berdasarkan ID.
 func GetApplicationStatus(c echo.Context) error {
+	UserID, Username := middleware.ExtractToken(c)
+	User := entity.User{}
+	err := config.DB.Where("Username = ? AND ID = ?", Username, UserID).First(&User).Error
+	if err != nil {
+		return c.JSON(http.StatusUnauthorized, map[string]interface{}{
+			"message": constants.ErrFailedToLogIn,
+			"error":   err.Error(),
+		})
+	}
+
 	// Mendapatkan ID dari parameter URL
 	idParam := c.Param("id")
 
