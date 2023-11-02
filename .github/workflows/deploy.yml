@@ -50,6 +50,6 @@ jobs:
             sudo docker rm apiContainer
             sudo docker rmi ${{ secrets.DOCKERHUBUSERNAME }}/krisnadwipayana:latest
             sudo docker pull ${{ secrets.DOCKERHUBUSERNAME }}/krisnadwipayana:latest
-            sudo docker run -d -p 8080:8080 -e chatbot=${{ secrets.chatbot }} -e SMTPPASSWORD=${{ secrets.SMTPPASSWORD }} -e SMTPUSERNAME=${{ secrets.SMTPUSERNAME }} -e SMTPPORT=${{ secrets.SMTPPORT }} -e SMTPSERVER=${{ secrets.SMTPSERVER }} -e SERVERPORT=${{ secrets.SERVERPORT }} -e DBUSER=${{ secrets.DBUSER }} -e DBPASS=${{ secrets.DBPASS }} -e DBHOST=${{ secrets.DBHOST }} -e DBPORT=${{ secrets.DBPORT }} -e DBNAME=${{ secrets.DBNAME }} --name krisnadwipayna ${{ secrets.DOCKERHUBUSERNAME }}/krisnadwipayana:latest
+            sudo docker run -d -p 8080:8080 -e SecretKey=${{ secrets.SECRETKEY }} -e chatbot=${{ secrets.CHATBOT }} -e SMTPPASSWORD=${{ secrets.SMTPPASSWORD }} -e SMTPUSERNAME=${{ secrets.SMTPUSERNAME }} -e SMTPPORT=${{ secrets.SMTPPORT }} -e SMTPSERVER=${{ secrets.SMTPSERVER }} -e SERVERPORT=${{ secrets.SERVERPORT }} -e DBUSER=${{ secrets.DBUSER }} -e DBPASS=${{ secrets.DBPASS }} -e DBHOST=${{ secrets.DBHOST }} -e DBPORT=${{ secrets.DBPORT }} -e DBNAME=${{ secrets.DBNAME }} --name krisnadwipayna ${{ secrets.DOCKERHUBUSERNAME }}/krisnadwipayana:latest
 
 
