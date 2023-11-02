@@ -7,7 +7,6 @@ const (
 	StatusRejected = "rejected"
 	StatusCanceled = "canceled"
 
-	SecretKey = "kuncirahasia"
 
 
 	ErrUserAlreadyExists   = "Pengguna sudah terdaftar dengan email ini"
