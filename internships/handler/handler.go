@@ -54,3 +54,5 @@ func (h *InternshipHandler) SubmitApplication(c echo.Context) error {
 
 	return c.JSON(http.StatusOK, responseData)
 }
+
+
